@@ -168,10 +168,8 @@ void shape::writeRecordHeader( FILE * out, int recordNumber )
 	fwrite(intbuf,sizeof(char),sizeof(int), out);
 
 	//Record Lengths are measured in 16 bit words
-    int contentLength = recordbyteLength();
-    contentLength -= 2*sizeof(int);	
-    contentLength = contentLength/2;	
-	intbuf = (char*)&contentLength;
+	int length = recordbyteLength()/2;
+	intbuf = (char*)&length;
 	SwapEndian((char*)intbuf,sizeof(int));
 	fwrite(intbuf,sizeof(char),sizeof(int), out);
 }

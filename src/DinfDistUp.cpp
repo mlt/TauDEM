@@ -64,26 +64,26 @@ float dist[9];
 
 //Calling function
 int dinfdistup(char *angfile,char *felfile,char *slpfile,char *wfile, char *rtrfile,
-			   int statmethod,int typemethod,int usew, int concheck, float thresh)
+			   int statmethod,int typemethod,int usew, int concheck, float thresh, int prow, int pcol)
 {
 	int er;
 switch (typemethod)
 {
 case 0:
 	er=hdisttoridgegrd(angfile,wfile,rtrfile,statmethod, 
-		concheck,thresh,usew);
+		concheck,thresh,usew, prow, pcol);
 break;
 case 1:
 	er=vrisetoridgegrd(angfile,felfile,rtrfile, 
-		statmethod,concheck,thresh);
+		statmethod,concheck,thresh, prow, pcol);
 break;
 case 2:
 	er=pdisttoridgegrd(angfile,felfile,wfile,rtrfile, 
-					statmethod,usew,concheck,thresh);
+					statmethod,usew,concheck,thresh, prow, pcol);
 break;
 case 3:
 	er=sdisttoridgegrd(angfile,felfile,wfile,rtrfile, 
-					statmethod,usew,concheck,thresh);
+					statmethod,usew,concheck,thresh, prow, pcol);
 break;
 }
 return (er);
@@ -93,7 +93,7 @@ return (er);
 //Horizontal distance to ridge //
 //*****************************//
 int hdisttoridgegrd(char *angfile, char *wfile, char *rtrfile, int statmethod, 
-					int concheck, float thresh,int usew)
+					int concheck, float thresh,int usew, int prow, int pcol)
 {
 	MPI_Init(NULL,NULL);{
 
@@ -297,8 +297,9 @@ int hdisttoridgegrd(char *angfile, char *wfile, char *rtrfile, int statmethod,
 
 	//Create and write TIFF file
 	float ddNodata = MISSINGFLOAT;
+	char prefix[5] = "du";
 	tiffIO dd(rtrfile, FLOAT_TYPE, &ddNodata, ang);
-	dd.write(xstart, ystart, ny, nx, dts->getGridPointer());
+	dd.write(xstart, ystart, ny, nx, dts->getGridPointer(),prefix,prow,pcol);
 
 	double writet = MPI_Wtime();
         double dataRead, compute, write, total,tempd;
@@ -332,7 +333,7 @@ int hdisttoridgegrd(char *angfile, char *wfile, char *rtrfile, int statmethod,
 //Vertical rise to the ridge //
 //**************************//
 int vrisetoridgegrd(char *angfile, char *felfile, char *rtrfile, int statmethod, 
-					int concheck, float thresh)
+					int concheck, float thresh, int prow, int pcol)
 {
 	MPI_Init(NULL,NULL);{
 
@@ -538,8 +539,9 @@ int vrisetoridgegrd(char *angfile, char *felfile, char *rtrfile, int statmethod,
 
 	//Create and write TIFF file
 	float ddNodata = MISSINGFLOAT;
+	char prefix[5]="du";
 	tiffIO dd(rtrfile, FLOAT_TYPE, &ddNodata, ang);
-	dd.write(xstart, ystart, ny, nx, dts->getGridPointer());
+	dd.write(xstart, ystart, ny, nx, dts->getGridPointer(),prefix,prow,pcol);
 
 	double writet = MPI_Wtime();
         double dataRead, compute, write, total,tempd;
@@ -571,7 +573,7 @@ int vrisetoridgegrd(char *angfile, char *felfile, char *rtrfile, int statmethod,
 //Pythagoras distance to the ridge //
 //********************************//
 int pdisttoridgegrd(char *angfile, char *felfile, char *wfile, char *rtrfile, 
-					int statmethod, int usew, int concheck, float thresh)
+					int statmethod, int usew, int concheck, float thresh, int prow, int pcol)
 {
 	MPI_Init(NULL,NULL);{
 
@@ -843,8 +845,9 @@ int pdisttoridgegrd(char *angfile, char *felfile, char *wfile, char *rtrfile,
 
 	//Create and write TIFF file
 	float ddNodata = MISSINGFLOAT;
+	char prefix[5] = "du";
 	tiffIO dd(rtrfile, FLOAT_TYPE, &ddNodata, ang);
-	dd.write(xstart, ystart, ny, nx, dtsh->getGridPointer());
+	dd.write(xstart, ystart, ny, nx, dtsh->getGridPointer(),prefix,prow,pcol);
 
 	double writet = MPI_Wtime();
         double dataRead, compute, write, total,tempd;
@@ -877,7 +880,7 @@ int pdisttoridgegrd(char *angfile, char *felfile, char *wfile, char *rtrfile,
 //Surface distance to the ridge //
 //*****************************//
 int sdisttoridgegrd(char *angfile, char *felfile, char *wfile, char *rtrfile, 
-					int statmethod, int usew, int concheck, float thresh)
+					int statmethod, int usew, int concheck, float thresh, int prow, int pcol)
 {
 	MPI_Init(NULL,NULL);{
 
@@ -1118,8 +1121,9 @@ int sdisttoridgegrd(char *angfile, char *felfile, char *wfile, char *rtrfile,
 
 	//Create and write TIFF file
 	float ddNodata = MISSINGFLOAT;
+	char prefix[5] = "du";
 	tiffIO dd(rtrfile, FLOAT_TYPE, &ddNodata, ang);
-	dd.write(xstart, ystart, ny, nx, dts->getGridPointer());
+	dd.write(xstart, ystart, ny, nx, dts->getGridPointer(),prefix,prow,pcol);
 
 	double writet = MPI_Wtime();
         double dataRead, compute, write, total,tempd;

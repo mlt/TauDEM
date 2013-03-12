@@ -53,7 +53,7 @@ using namespace std;
 
 
 int gridnet( char *pfile, char *plenfile, char *tlenfile, char *gordfile, char *maskfile,
-		char *shfile, int useMask, int useOutlets, int thresh) 
+		char *shfile, int useMask, int useOutlets, int thresh,int prow, int pcol) 
 {//1
 
 	MPI_Init(NULL,NULL);{
@@ -449,12 +449,15 @@ int gridnet( char *pfile, char *plenfile, char *tlenfile, char *gordfile, char *
 	//Create and write TIFF file
 	short sNodata = -1;
 	float fNodata = -1.0f;
+	char prefix[5] = "gord";
 	tiffIO gordIO(gordfile, SHORT_TYPE, &sNodata, p);
-	gordIO.write(xstart, ystart, ny, nx, gord->getGridPointer());
+	gordIO.write(xstart, ystart, ny, nx, gord->getGridPointer(),prefix,prow,pcol);
+	strncpy(prefix,"plen",5);
 	tiffIO plenIO(plenfile, FLOAT_TYPE, &fNodata, p);
-	plenIO.write(xstart, ystart, ny, nx, plen->getGridPointer());
+	plenIO.write(xstart, ystart, ny, nx, plen->getGridPointer(),prefix,prow,pcol);
+	strncpy(prefix,"tlen",5);
 	tiffIO tlenIO(tlenfile, FLOAT_TYPE, &fNodata, p);
-	tlenIO.write(xstart, ystart, ny, nx, tlen->getGridPointer());
+	tlenIO.write(xstart, ystart, ny, nx, tlen->getGridPointer(),prefix,prow,pcol);
 
 	double writet = MPI_Wtime();
 	double dataRead, compute, write, total,tempd;

@@ -52,7 +52,7 @@ email:  dtarb@usu.edu
 
 using namespace std;
 
-int peukerdouglas(char *felfile, char *ssfile,float *p)
+int peukerdouglas(char *felfile, char *ssfile,float *p, int prow, int pcol)
 {
 	MPI_Init(NULL,NULL);
 	{
@@ -217,9 +217,10 @@ int peukerdouglas(char *felfile, char *ssfile,float *p)
 	}															
 	//Stop timer
 	double computet = MPI_Wtime();
+	char prefix[5] = "ss";
 	tiffIO outelev(ssfile,SHORT_TYPE,&ssnodata, felev);
 	
-	outelev.write((long)globalxstart, (long)globalystart, (long)elevny, (long)elevnx, ss->getGridPointer());
+	outelev.write((long)globalxstart, (long)globalystart, (long)elevny, (long)elevnx, ss->getGridPointer(),prefix,prow,pcol);
 	double writet = MPI_Wtime();
 	double dataRead, compute, write, total,temp;
         dataRead = readt-begint;

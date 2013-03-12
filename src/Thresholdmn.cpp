@@ -45,12 +45,12 @@ email:  dtarb@usu.edu
 #include "commonLib.h"
 #include "tardemlib.h"
 
-int threshold(char *ssafile,char *srcfile,char *maskfile, float thresh, int usemask);
+int threshold(char *ssafile,char *srcfile,char *maskfile, float thresh, int usemask, int prow, int pcol);
 
 int main(int argc,char **argv)  
 {
    char ssafile[MAXLN],srcfile[MAXLN], maskfile[MAXLN];
-   int err, usemask;
+   int err, usemask, prow=0, pcol=0;
    float thresh;
       
    if(argc < 2) goto errexit;
@@ -78,6 +78,24 @@ int main(int argc,char **argv)
 				}
 				else goto errexit;
 			}
+                else if(strcmp(argv[i],"-mf")==0)
+                {
+                        i++;
+                        if(argc > i)
+                        {
+                                prow = atoi(argv[i]);
+                                i++;
+                                if(argc > i)
+                                {
+                                        pcol = atoi(argv[i]);
+                                        i++;
+                                }
+                                else goto errexit;
+                        }
+                        else goto errexit;
+                        if(prow <=0 || pcol <=0)
+                                goto errexit;
+                }
 			else if(strcmp(argv[i],"-src")==0)
 			{
 				i++;
@@ -112,7 +130,7 @@ int main(int argc,char **argv)
 		   else goto errexit;
 		}
    }
-    if( (err=threshold(ssafile,srcfile,maskfile,thresh,usemask)) != 0)
+    if( (err=threshold(ssafile,srcfile,maskfile,thresh,usemask,prow,pcol)) != 0)
         printf("Threshold Error %d\n",err);
 
 	return 0;

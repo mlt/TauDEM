@@ -50,7 +50,7 @@ email:  dtarb@usu.edu
 using namespace std;
 
 
-int depgrd(char* angfile, char* dgfile, char* depfile)
+int depgrd(char* angfile, char* dgfile, char* depfile, int prow, int pcol)
 {
 
 	MPI_Init(NULL,NULL);{
@@ -236,8 +236,9 @@ int depgrd(char* angfile, char* dgfile, char* depfile)
 	double computet = MPI_Wtime();
 
 	//Create and write TIFF file
+	char prefix[5] = "dep";
 	tiffIO ddep(depfile, FLOAT_TYPE, &depNodata, ang);
-	ddep.write(xstart, ystart, ny, nx, dep->getGridPointer());
+	ddep.write(xstart, ystart, ny, nx, dep->getGridPointer(),prefix,prow,pcol);
 
 	double writet = MPI_Wtime();
         double dataRead, compute, write, total,tempd;

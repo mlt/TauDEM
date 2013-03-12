@@ -49,7 +49,7 @@ email:  dtarb@usu.edu
 using namespace std;
 
 
-int slopearea(char *slopefile, char*scafile, char *safile, float *p)
+int slopearea(char *slopefile, char*scafile, char *safile, float *p, int prow, int pcol)
 {
 	MPI_Init(NULL,NULL);{
 
@@ -142,8 +142,9 @@ int slopearea(char *slopefile, char*scafile, char *safile, float *p)
 
 	//Create and write TIFF file
 	float aNodata = -1.0f;
+	char prefix[5] = "sa";
 	tiffIO saa(safile, FLOAT_TYPE, &aNodata, slp);
-	saa.write(xstart, ystart, ny, nx, sa->getGridPointer());
+	saa.write(xstart, ystart, ny, nx, sa->getGridPointer(),prefix,prow,pcol);
 
 	//Brackets force MPI-dependent objects to go out of scope before Finalize is called
 	}MPI_Finalize();

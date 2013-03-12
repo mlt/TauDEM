@@ -50,7 +50,7 @@ email:  dtarb@usu.edu
 #include "initneighbor.h"
 using namespace std;
 
-int area( char* angfile, char* scafile, char *shfile, char *wfile, int useOutlets, int usew, int contcheck) {
+int area( char* angfile, char* scafile, char *shfile, char *wfile, int useOutlets, int usew, int contcheck, int prow, int pcol) {
 
 	MPI_Init(NULL,NULL);{
 
@@ -128,7 +128,8 @@ int area( char* angfile, char* scafile, char *shfile, char *wfile, int useOutlet
 	double readt = MPI_Wtime();
 
 	//Convert geo coords to grid coords
-	int *outletsX=NULL, *outletsY=NULL;
+	int *outletsX = NULL;
+	int *outletsY = NULL;
 	if(usingShapeFile) {
 		outletsX = new int[numOutlets];
 		outletsY = new int[numOutlets];
@@ -161,6 +162,12 @@ int area( char* angfile, char* scafile, char *shfile, char *wfile, int useOutlet
 	queue<node> que;
 
 	initNeighborDinfup(neighbor,flowData,&que,nx, ny, useOutlets, outletsX, outletsY, numOutlets);
+	if (outletsX)
+		delete outletsX;
+	if (outletsY)
+		delete outletsY;
+
+
 	finished = false;
 
 	//Ring terminating while loop
@@ -250,8 +257,9 @@ int area( char* angfile, char* scafile, char *shfile, char *wfile, int useOutlet
 
 	//Create and write TIFF file
 	float scaNodata = -1.0f;
+	char prefix[5] = "sca";
 	tiffIO sca(scafile, FLOAT_TYPE, &scaNodata, ang);
-	sca.write(xstart, ystart, ny, nx, areadinf->getGridPointer());
+	sca.write(xstart, ystart, ny, nx, areadinf->getGridPointer(),prefix,prow,pcol);
 
 	double writet = MPI_Wtime();
  	double dataRead, compute, write, total,tempd;

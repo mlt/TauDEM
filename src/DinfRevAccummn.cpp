@@ -50,7 +50,7 @@ email:  dtarb@usu.edu
 int main(int argc,char **argv)
 {
    char angfile[MAXLN],wgfile[MAXLN],raccfile[MAXLN],dmaxfile[MAXLN];
-   int err,i;
+   int err,i,prow=0,pcol=0;
    
    if(argc < 2)
     {  
@@ -80,6 +80,24 @@ int main(int argc,char **argv)
 			}
 			else goto errexit;
 		}
+                else if(strcmp(argv[i],"-mf")==0)
+                {
+                        i++;
+                        if(argc > i)
+                        {
+                                prow = atoi(argv[i]);
+                                i++;
+                                if(argc > i)
+                                {
+                                        pcol = atoi(argv[i]);
+                                        i++;
+                                }
+                                else goto errexit;
+                        }
+                        else goto errexit;
+                        if(prow <=0 || pcol <=0)
+                                goto errexit;
+                }
 		else if(strcmp(argv[i],"-wg")==0)
 		{
 			i++;
@@ -121,7 +139,7 @@ int main(int argc,char **argv)
 		nameadd(raccfile,argv[1],"racc");
 		nameadd(dmaxfile,argv[1],"dmax");
 	}  
-	if((err=dsaccum(angfile,wgfile,raccfile,dmaxfile)) != 0)
+	if((err=dsaccum(angfile,wgfile,raccfile,dmaxfile,prow,pcol)) != 0)
         printf("dsaccum error %d\n",err);
 
 	return 0;

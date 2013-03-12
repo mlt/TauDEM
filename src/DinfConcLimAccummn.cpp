@@ -51,7 +51,7 @@ email:  dtarb@usu.edu
 int main(int argc,char **argv)
 {
    char angfile[MAXLN],ctptfile[MAXLN],dmfile[MAXLN],qfile[MAXLN],shfile[MAXLN],dgfile[MAXLN];
-   int err,useOutlets=0,contcheck=1,i;
+   int err,useOutlets=0,contcheck=1,i,prow=0,pcol=0;
    float cSol=1.;
    
    if(argc < 2)
@@ -82,6 +82,24 @@ int main(int argc,char **argv)
 			}
 			else goto errexit;
 		}
+                else if(strcmp(argv[i],"-mf")==0)
+                {
+                        i++;
+                        if(argc > i)
+                        {
+                                prow = atoi(argv[i]);
+                                i++;
+                                if(argc > i)
+                                {
+                                        pcol = atoi(argv[i]);
+                                        i++;
+                                }
+                                else goto errexit;
+                        }
+                        else goto errexit;
+                        if(prow <=0 || pcol <=0)
+                                goto errexit;
+                }
 		else if(strcmp(argv[i],"-dg")==0)
 		{
 			i++;
@@ -161,7 +179,7 @@ int main(int argc,char **argv)
 		nameadd(ctptfile,argv[1],"ctpt");
 
 	}  
-	if((err=dsllArea(angfile,ctptfile,dmfile,shfile,qfile,dgfile,useOutlets,contcheck,cSol)) != 0)
+	if((err=dsllArea(angfile,ctptfile,dmfile,shfile,qfile,dgfile,useOutlets,contcheck,cSol,prow,pcol)) != 0)
         printf("area error %d\n",err);
 
 	return 0;

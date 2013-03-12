@@ -55,7 +55,7 @@ float dist[9];
 
 // Slope D
 ///////////////////////////////////////////////////////////////////////
-int sloped(char *pfile,char* felfile,char* slpdfile, double dn)
+int sloped(char *pfile,char* felfile,char* slpdfile, double dn, int prow, int pcol)
 {
 	MPI_Init(NULL,NULL);{
 
@@ -252,8 +252,9 @@ int sloped(char *pfile,char* felfile,char* slpdfile, double dn)
 
 	//Create and write TIFF file
 	float slpnd = MISSINGFLOAT;
+	char prefix[5] = "slpd";
 	tiffIO slpIO(slpdfile, FLOAT_TYPE, &slpnd, pIO);
-	slpIO.write(xstart, ystart, ny, nx, sd->getGridPointer());
+	slpIO.write(xstart, ystart, ny, nx, sd->getGridPointer(),prefix,prow,pcol);
 
 	double writet = MPI_Wtime();
         double dataRead, compute, write, total,temp;

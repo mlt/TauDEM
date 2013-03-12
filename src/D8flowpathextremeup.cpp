@@ -56,7 +56,7 @@ email:  dtarb@usu.edu
 #include "initneighbor.h"
 using namespace std;
 
-int d8flowpathextremeup(char *pfile, char*safile, char *ssafile, int usemax, char *outletsfile, int useOutlets, int contcheck)
+int d8flowpathextremeup(char *pfile, char*safile, char *ssafile, int usemax, char *outletsfile, int useOutlets, int contcheck, int prow, int pcol)
 {
 MPI_Init(NULL,NULL);
 {  //  All code within braces so that objects go out of context and destruct before MPI is closed
@@ -254,8 +254,9 @@ MPI_Init(NULL,NULL);
 
 	//Create and write TIFF file
 	float aNodata = MISSINGFLOAT;
+	char prefix[5] = "ssa";
 	tiffIO a(ssafile, FLOAT_TYPE, &aNodata, p);
-	a.write(xstart, ystart, ny, nx, ssa->getGridPointer());
+	a.write(xstart, ystart, ny, nx, ssa->getGridPointer(),prefix,prow,pcol);
 	double writet = MPI_Wtime();
  	double dataRead, compute, write, total,tempd;
         dataRead = readt-begint;

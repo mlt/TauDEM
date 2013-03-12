@@ -60,7 +60,7 @@ using namespace std;
 // moved to commonlib.h
 
 int dmarea(char* angfile,char* adecfile,char* dmfile,char* shfile,char* wfile,
-		   int useOutlets,int usew,int contcheck)
+		   int useOutlets,int usew,int contcheck, int prow, int pcol)
 {
 
 	MPI_Init(NULL,NULL);{
@@ -279,8 +279,9 @@ int dmarea(char* angfile,char* adecfile,char* dmfile,char* shfile,char* wfile,
 
 	//Create and write TIFF file
 	float scaNodata = MISSINGFLOAT;
+	char prefix[5] = "dsca";
 	tiffIO dsca(adecfile, FLOAT_TYPE, &scaNodata, ang);
-	dsca.write(xstart, ystart, ny, nx, daccum->getGridPointer());
+	dsca.write(xstart, ystart, ny, nx, daccum->getGridPointer(),prefix,prow,pcol);
 
 	double writet = MPI_Wtime();
         double dataRead, compute, write, total,tempd;

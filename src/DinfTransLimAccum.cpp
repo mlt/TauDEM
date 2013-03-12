@@ -62,7 +62,7 @@ using namespace std;
 //Transport limited accumulation funciton
 int tlaccum(char *angfile, char *tsupfile, char *tcfile, char *tlafile, char *depfile, 
 			char *cinfile, char *coutfile, char *shfile, int useOutlets, int usec, 
-			int contcheck)
+			int contcheck, int prow, int pcol)
 {
 
 	MPI_Init(NULL,NULL);{
@@ -336,15 +336,18 @@ int tlaccum(char *angfile, char *tsupfile, char *tcfile, char *tlafile, char *de
 
 	//Create and write TIFF file
 	float scaNodata = MISSINGFLOAT;
+	char prefix[5] = "tla";
 	tiffIO ttla(tlafile, FLOAT_TYPE, &scaNodata, ang);
-	ttla.write(xstart, ystart, ny, nx, tla->getGridPointer());
-
+	ttla.write(xstart, ystart, ny, nx, tla->getGridPointer(),prefix,prow,pcol);
+	
+	strncpy(prefix,"tdep",5);
 	tiffIO ddep(depfile, FLOAT_TYPE, &scaNodata, ang);
-	ddep.write(xstart, ystart, ny, nx, dep->getGridPointer());
+	ddep.write(xstart, ystart, ny, nx, dep->getGridPointer(),prefix,prow,pcol);
 
 	if(usec == 1){
+		strncpy(prefix,"ctpt",5);
 		tiffIO ccsout(coutfile, FLOAT_TYPE, &scaNodata, ang);
-		ccsout.write(xstart, ystart, ny, nx, csout->getGridPointer());
+		ccsout.write(xstart, ystart, ny, nx, csout->getGridPointer(),prefix,prow,pcol);
 	}
 
 	double writet = MPI_Wtime();

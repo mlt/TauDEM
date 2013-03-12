@@ -51,7 +51,7 @@ email:  dtarb@usu.edu
 int main(int argc,char **argv)
 {
    char angfile[MAXLN],dgfile[MAXLN],depfile[MAXLN];
-   int err,useOutlets=0,usew=0,contcheck=1,i;
+   int err,useOutlets=0,usew=0,contcheck=1,i,prow=0,pcol=0;
    
    if(argc < 2)
     {  
@@ -91,6 +91,24 @@ int main(int argc,char **argv)
 			}
 			else goto errexit;
 		}
+                else if(strcmp(argv[i],"-mf")==0)
+                {
+                        i++;
+                        if(argc > i)
+                        {
+                                prow = atoi(argv[i]);
+                                i++;
+                                if(argc > i)
+                                {
+                                        pcol = atoi(argv[i]);
+                                        i++;
+                                }
+                                else goto errexit;
+                        }
+                        else goto errexit;
+                        if(prow <=0 || pcol <=0)
+                                goto errexit;
+                }
 		else if(strcmp(argv[i],"-dep")==0)
 		{
 			i++;
@@ -111,7 +129,7 @@ int main(int argc,char **argv)
 		nameadd(dgfile,argv[1],"dg");
 		nameadd(depfile,argv[1],"dep");
 	}  
-	if((err=depgrd(angfile,dgfile,depfile)) != 0)
+	if((err=depgrd(angfile,dgfile,depfile,prow,pcol)) != 0)
         printf("depgrd error %d\n",err);
 
 	return 0;

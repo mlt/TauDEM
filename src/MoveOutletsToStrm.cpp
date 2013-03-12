@@ -68,7 +68,7 @@ using namespace std;
 
 
 
-int outletstosrc(char *pfile, char *srcfile, char *outletshapefile, char *movedoutletshapefile, int maxdist)
+int outletstosrc(char *pfile, char *srcfile, char *outletshapefile, char *movedoutletshapefile, int maxdist, int prow, int pcol)
 {
 
 	MPI_Init(NULL,NULL);{

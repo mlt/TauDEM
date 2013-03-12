@@ -6,37 +6,8 @@
 
 */
 
-/*  Copyright (C) 2010  David Tarboton, Utah State University
-
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License 
-version 2, 1991 as published by the Free Software Foundation.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-A copy of the full GNU General Public License is included in file 
-gpl.html. This is also available at:
-http://www.gnu.org/copyleft/gpl.html
-or from:
-The Free Software Foundation, Inc., 59 Temple Place - Suite 330, 
-Boston, MA  02111-1307, USA.
-
-If you wish to use or incorporate this program (or parts of it) into 
-other software that does not meet the GNU General Public License 
-conditions contact the author to request permission.
-David G. Tarboton  
-Utah State University 
-8200 Old Main Hill 
-Logan, UT 84322-8200 
-USA 
-http://www.engineering.usu.edu/dtarb/ 
-email:  dtarb@usu.edu 
-*/
-
-//  This software is distributed from http://hydrology.usu.edu/taudem/
+//  This is not a functional part of TauDEM.  Rather is is a testing program used to test code 
+//  fragments being developed, often for testing the tiffio libraries
 
 #include "tiffIO.h"
 #include "commonLib.h"
@@ -45,63 +16,60 @@ email:  dtarb@usu.edu
 
 #include "linearpart.h"
 #include "createpart.h"
+#include "dirent.h"
+
+#include <iostream>
+
+# define NAME_MAX 100
 
 int main(){
 	MPI_Init(NULL, NULL);
 	{
-		//  Program used to test Tiffio.  Provide any format in.tif file.
-		//  Compile with type in the line below either SHORT_TYPE, LONG_TYPE or FLOAT_TYPE
-		//  Then the output in out.tif should be the input data changed to the designated type
-//  Code to repeat memory allocation many times to test linearpart.h code for trapping exception
-//  in memory allocation
-		tiffIO infile("logan/logan.tif",FLOAT_TYPE);
-		//tiffIO infile("gsl100.tif",FLOAT_TYPE);
-		//long cols = infile.getTotalX();
-		//long rows = infile.getTotalY();
-		//	//Create partition and read data
-		//tdpartition* elevDEM[10000];
-		//float dx,dy;
-		//for(int i=0; i<10000; i++)
-		//{
-		//	elevDEM[i] = CreateNewPartition(infile.getDatatype(), cols, rows, dx, dy, infile.getNodata());
-		//	if(elevDEM[i]==0)printf("Failed to create partition\n");
-		//	fflush(stdout);
-		//	int nx = elevDEM[i]->getnx();
-		//	int ny = elevDEM[i]->getny();
-		//	int xstart, ystart;
-		//	elevDEM[i]->localToGlobal(0, 0, xstart, ystart);
-		//	fprintf(stdout,"Partition created %d\n",i);
-		//	fflush(stdout);
-		//	infile.read(xstart, ystart, ny, nx, elevDEM[i]->getGridPointer());
-		//}
+		DIR* dir;
+		struct dirent *drnt;
+		int numFiles=0,filecount=0;
+		char **files;
 
-//  Tiffio testing block of code
-		//tiffIO infile("streambuffreclass2.tif",LONG_TYPE);
-		//long cols = infile.getTotalX();
-		//long rows = infile.getTotalY();
+		char dirname[50];
+		sprintf(dirname,"C:\\users\\dtarb\\scratch\\logan");
+		dir=opendir(dirname);
+        //Check that we can open the directory.
+        if(dir == NULL){
+                cout << "Error: dir " << opendir << " failed to open." << endl;
+                MPI_Abort(MCW,3);//file open fail.
+        }
+        //Count the number of tiff files in the folder.
+        while(drnt = readdir(dir)){
+                if(strstr(drnt->d_name,".tif") != NULL)
+                        numFiles++;
+        }
+        //cout << "cout = " << numFiles << endl;
+        closedir(dir);
+        //create an array of file names, one for each tif file.
+        files = new char*[numFiles];
+        for(long i = 0; i < numFiles;i++)
+                files[i] = new char[NAME_MAX];
+        dir = opendir(dirname);
+        //make sure the directory opened again.
+        if(dir)
+        {       //read the first entery in the directory
+                while(drnt = readdir(dir))
+                {       //if the name has '.tif' in it save the file name.
+                        if(strstr(drnt->d_name,".tif") != NULL){
+                                cout << drnt->d_name << endl;
+                                if(filecount < numFiles){
+                                        strncpy(files[filecount],drnt->d_name,NAME_MAX);
+                                        filecount++;
+                                }
+                        }
+                }
+        }
+        else
+        {
+                printf("Can not open directory '%s'\n", dirname);
+        }
 
-		//DATA_TYPE type = infile.getDatatype();
-		//tiffIO fel("fs_small.tif",FLOAT_TYPE);
-		//if(!fel.compareTiff(infile))
-		//printf("Mismatch\n");
 
-		//void *inarray;
-		//void* nd = infile.getNodata();	
-		//if(type == SHORT_TYPE){
-		//	inarray = new short[rows*cols];
-		//	short ndv= *(short *)nd;
-		//	printf("No data: %d\n",ndv);
-		//}
-		//else if(type == LONG_TYPE){
-		//	inarray = new long[rows*cols];
-		//	long ndv= *(long *)nd;
-		//	printf("No data: %ld\n",ndv);
-		//}
-		//else if(type == FLOAT_TYPE){
-		//	inarray = new float[rows*cols];
-		//}
-
-		//infile.read(0, 0, rows, cols, inarray);
 		printf("Char Size %d\n",sizeof(char));
 		printf("Short Size %d\n",sizeof(short));
 		printf("Int Size %d\n",sizeof(int));
@@ -110,12 +78,47 @@ int main(){
 		printf("Float Size %d\n",sizeof(float));
 		printf("Double Size %d\n",sizeof(double));
 		printf("Long Double Size %d\n",sizeof(long double));
-		printf("int32_t %d\n",sizeof(int32_t));
-		printf("int64_t %d\n",sizeof(int64_t));
+		printf("int32_t size %d\n",sizeof(int32_t));
+		printf("int64_t size %d\n",sizeof(int64_t));
+
+		//  Program used to test Tiffio.  Provide any format in.tif file.
+		//  Compile with type in the line below either SHORT_TYPE, LONG_TYPE or FLOAT_TYPE
+		//  Then the output in out.tif should be the input data changed to the designated type
+
+//  Tiffio testing block of code
+
+
+		tiffIO infile("DemTestfel.tif",FLOAT_TYPE);
+		long cols = infile.getTotalX();
+		long rows = infile.getTotalY();
+
+		DATA_TYPE type = infile.getDatatype();
+		//tiffIO fel("fs_small.tif",FLOAT_TYPE);
+		//if(!fel.compareTiff(infile))
+		//printf("Mismatch\n");
+
+		void *inarray;
+		void* nd = infile.getNodata();	
+		if(type == SHORT_TYPE){
+			inarray = new short[rows*cols];
+			short ndv= *(short *)nd;
+			printf("No data: %d\n",ndv);
+		}
+		else if(type == LONG_TYPE){
+			inarray = new long[rows*cols];
+			long ndv= *(long *)nd;
+			printf("No data: %ld\n",ndv);
+		}
+		else if(type == FLOAT_TYPE){
+			inarray = new float[rows*cols];
+		}
+
+		infile.read(0, 0, rows, cols, inarray);
+
 
 	//	float nd = 1.0f;
-		//tiffIO outfile("out.tif", type, nd, infile);
-		//outfile.write(0, 0, rows, cols, inarray);
+		tiffIO outfile("out.tif", type, nd, infile);
+		outfile.write(0, 0, rows, cols, inarray);
    	}
 	MPI_Finalize();
 	return 0;

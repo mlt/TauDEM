@@ -40,1836 +40,534 @@ email:  dtarb@usu.edu
 
 #include <mpi.h>
 #include <stdio.h>
+//#include "stdint.h"  // See http://en.wikipedia.org/wiki/Stdint.h for details.
 #include <memory>
 #include "tiffIO.h"
+#include "tifFile.h"
+#include <iostream>
+
+//  The block below so that mkdir from the correct header is used
+#ifdef  _MSC_VER  //  Microsoft compiler
+#include <direct.h>
+#else
+#include <sys/stat.h>
+#endif
+
+#include <ctype.h>
+
 using namespace std;
 
-tiffIO::tiffIO(char *fname, DATA_TYPE newtype){
-	MPI_Status status;
-	MPI_Offset mpiOffset;
-
+//initialize to read in.
+tiffIO::tiffIO(char *dirname, DATA_TYPE newtype){
 	MPI_Comm_size(MCW, &size);
 	MPI_Comm_rank(MCW, &rank);
-
-	//printf("newtype: %d.\n", newtype);
-	int file_error = MPI_File_open( MCW, fname, MPI_MODE_RDONLY , MPI_INFO_NULL, &fh);
-	if( file_error != MPI_SUCCESS) { 
-		printf("Error opening file %s.\n", fname);
-		printf("TauDEM input files have to be GeoTiff files.\n");
-		MPI_Abort(MCW,21);
-	}
-	strcpy(filename,fname);  // Copy file name
-			
-	//Generate datatype constants
+//	if(rank == 0)
+//		cout << "Constructor Start" << endl;
+	dir = NULL;
+	drnt = NULL;
+	numFiles = 0;
+	long filecount = 0;
+	double temp = 0;
+	double MaxY;
+	double MaxX;
+	double MinX;
+	double MinY;
+	gTotalX = 0;
+	gTotalY = 0;
+	fileX = 0;
+	fileY = 0;
 	datatype = newtype;
-	if( datatype == SHORT_TYPE ) {
-		dataSizeObj = sizeof (short);
+	strncpy(dirn, dirname, NAME_MAX);
+	//Check that we can open the directory.
+	if((dir = opendir(dirname)) == NULL){
+		cout << "Error: dir " << opendir << " " << dirname << " failed to open." << endl;
+		MPI_Abort(MCW,3);//file open fail.
 	}
-	else if( datatype == LONG_TYPE) {
-		dataSizeObj = sizeof (long);
+	//Count the number of tiff files in the folder.
+	long numChar;
+	while(drnt = readdir(dir)){
+		//if(strstr(drnt->d_name,".tif") != NULL){
+			numChar = strlen(drnt->d_name);
+			if(numChar > 4)  //  Can not be a tif file if name is too short
+			 if(drnt->d_name[numChar-4] == '.' && tolower(drnt->d_name[numChar-3]) == 't'
+                         && tolower(drnt->d_name[numChar-2]) == 'i' && tolower(drnt->d_name[numChar-1]) == 'f')
+				numFiles++;
+		//}
 	}
-	else if( datatype == FLOAT_TYPE) {
-		dataSizeObj = sizeof (float);
+	if( numFiles == 0 ){
+		cout << "error no files to read" << endl;
+		MPI_Abort(MCW, 100);
 	}
-//	printf("dataSizeObj: %d.\n", dataSizeObj);
+	closedir(dir);
 
-	//Read byte order word
-	short endian;
-	MPI_File_read( fh, &endian, 2, MPI_BYTE, &status);
-	if( endian != LITTLEENDIAN ) {
-		printf("File or machine not in correct endian form. (%d)!=18761\n",endian);
-		MPI_Abort(MCW,-1);
-	}
+	//create an array of file names, one for each tif file.
+	files = new char*[numFiles];
+	for(long i = 0; i < numFiles;i++)
+		files[i] = new char[NAME_MAX];
 
-	//Read the TIFF version word
-	MPI_File_read( fh, &version, 2, MPI_BYTE, &status);
-
-	//Process the remiander of the file header based on version type
-	if ( version == TIFF ) {
-		//Read first IFD offset
-		//KATS does not read right with unsigned long even though the data is really an unsigned long!
-		uint32_t offset;
-		MPI_File_read( fh, &offset, 4, MPI_BYTE, &status);
-		mpiOffset = offset;
-		MPI_File_seek( fh, offset, MPI_SEEK_SET );
+	//make sure the directory opened again. And open it.
+	if((dir = opendir(dirname)) != NULL)
+	{	//read the first entery in the directory
+		while(drnt = readdir(dir))
+		{	//if the name has '.tif' in it, and at the end, save the file name.
+			//if(strstr(drnt->d_name,".tif") != NULL){
+			numChar = strlen(drnt->d_name);
+			if(numChar > 4){
+			if(drnt->d_name[numChar-4] == '.' && tolower(drnt->d_name[numChar-3]) == 't'
+				&& tolower(drnt->d_name[numChar-2]) == 'i' && tolower(drnt->d_name[numChar-1]) == 'f')
+				if(filecount < numFiles){
+					strncpy(files[filecount],drnt->d_name,NAME_MAX);
+					filecount++;
+				}
+			}
+		}
 	}
-	else if ( version == BIGTIFF ) {
+	else
+	{
+		printf("Can not open directory '%s'\n", dirn);
+		MPI_Abort(MCW, 101);
+	}
 	
-		//Does not properly handle BIGTIFF right now, so throw error
-		printf("Not a geoTiff file %s\n", fname);
-		printf("TauDEM input files have to be GeoTiff files.\n");
-		printf("The BigTiff format for files greater than 4GB is not yet supported.\n");
-		MPI_Abort(MCW,-1);
-
-		//Read offset bytesize
-		short offsetByteSize;
-		MPI_File_read( fh, &offsetByteSize, 2, MPI_BYTE, &status);
-		if ( offsetByteSize != 8 ) {
-			printf("BIGTIFF file must have an offset bytesize of 8. (%d)!=18761\n",endian);
-			MPI_Abort(MCW,-1);
-		}
-		//Read empty word in BIGTIFF
-		short emptyWord;
-		MPI_File_read( fh, &emptyWord, 2, MPI_BYTE, &status);
-		if ( emptyWord != 0 ) {
-			printf("BIGTIFF file must have a value of 0 for the 4th word. (%d)!=18761\n",endian);
-			MPI_Abort(MCW,-1);
-		}
-		//Read first IFD offset
-		unsigned long long offset8;
-		MPI_File_read( fh, &offset8, 8, MPI_BYTE, &status);
-		mpiOffset = offset8;
-		MPI_File_seek( fh, offset8, MPI_SEEK_SET );
+	closedir(dir);
+	IOfiles = new tifFile*[numFiles];//create a array of tifFile pointers. One for each file name.
+	for(int i = 0; i < numFiles; i++)
+	{	//Open each tif file as a tifFile.
+		strncpy(file,dirname,NAME_MAX); // Put the directory path into the file name to be oppened
+		strncat(file,"/",2);		//add trailing slash.
+		IOfiles[i] = new tifFile(strncat(file,files[i],NAME_MAX),datatype);//Create a new tifFile and Read it in.
 	}
-	else {
-		printf("Error opening file %s.\n", fname);
-		printf("File verion not TIFF or BIGTIFF. (%d)!=18761\n",endian);
-		printf("TauDEM input files have to be GeoTiff files.\n");
-		MPI_Abort(MCW,-1);
-	}
+	nodata = IOfiles[0]->getNodata();
+	DATA_TYPE olddatatype = IOfiles[0]->getDatatype();
+	dx = IOfiles[0]->getdx();
+	dy = IOfiles[0]->getdy();
 
-	//Read IFD Header
-	if ( version == TIFF ) {
-		MPI_File_read( fh, &numEntries, 2, MPI_BYTE, &status);
-	}
-	else {
-		MPI_File_read( fh, &numEntries, 8, MPI_BYTE, &status);
-	}
-
-	//ifds = ( ifd*) malloc( sizeof(ifd) * numEntries );
-	ifds = new ifd[numEntries];
-	//BT unsigned long index;
-	long index;
-	for( index=0; index<numEntries; ++index ) {
-        readIfd(ifds[index]);
-		//printIfd( ifds[index] );
-	}
-
-	//Set tiff values to defaults
-	//datatype = UNKNOWN_TYPE;
-	int noDataDef = 0;
-	long rasterTypeIndex = 0;
-	int origRasterType = 0;
-	tileOrRow = 0;
-	
-	filedata.geoKeySize =0;
-	filedata.geoDoubleSize=0;
-	filedata.geoAsciiSize=0;
-	filedata.gdalAsciiSize=0;
-
-	for( index=0;index<numEntries;++index ) {
-		//Reference http://www.awaresystems.be/imaging/tiff/tifftags/extension.html
-		switch( ifds[index].tag ) {
-		case 256: //ImageWidth, unsigned short or long
-			//BT totalX = (unsigned long) (ifds[index].offset);
-			totalX = ifds[index].offset;
-			break;
-		case 257: //ImageLength, unsigned short or long
-			//BT totalY = (unsigned long) (ifds[index].offset);
-			totalY = ifds[index].offset;
-			break;
-		case 258: //BitsPerSample, unsigned short
-			if( ifds[index].offset % 8 != 0 ) {
-				printf("Error opening file %s.\n", fname);
-				printf("Datasize is %d bits. Must be multiple of 8 (a byte)\n",ifds[index].offset);	
-				printf("TauDEM input files have to be GeoTiff files.\n");
-				MPI_Abort(MCW,4);
-			}
-			//BT dataSize = (unsigned short) (ifds[index].offset/8); //always an unsigned short
-			dataSizeFileIn = (unsigned short) (ifds[index].offset/8); //always an unsigned short
-			break;
-		case 259: //Compression, unsigned short
-			if( ifds[index].offset != 1 ) {
-				printf("Error opening file %s.\n", fname);
-				printf("Tiff file compressed. Unable to process compressed tiff files.\n");
-				MPI_Abort(MCW,-4);
-			}
-			break;
-		case 273: //StripOffsets, unsigned short or long
-			tileOrRow = 2;
-			//BT numOffsets = (unsigned long) (ifds[index].count);
-			//BT offsets = (unsigned long long*) malloc( 4*ifds[index].count);
-			numOffsets = ifds[index].count;
-			//SizeOf offsets = (long*) malloc( 4*ifds[index].count);
-			offsets = (uint32_t*) malloc(sizeof(uint32_t)*ifds[index].count);  //DGT
-			//if the stripoffset data is within the 4 bytes stored within the IFD
-			if( ifds[index].count == 1)
-				offsets[0] = ifds[index].offset;
-			//else use those 4 bytes to find the actual stripoffset data
-			else {
-				mpiOffset = ifds[index].offset;
-				MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-				//BT for(unsigned long long i=0; i<ifds[index].count;++i) {
-				for(unsigned long i=0; i<ifds[index].count;++i) {
-  					MPI_File_read( fh, &offsets[i], 4, MPI_BYTE, &status);
-				}
-			}
-			break;
-		case 277: //SamplesPerPixel, unsigned short
-			if( ifds[index].offset != 1 ) {
-				printf("Error opening file %s.\n", fname);
-				printf("Samples per pixel not equal to one. Unable to interpret tiff\n");
-				MPI_Abort(MCW,-5);
-			}
-			break;
-		case 278: //RowsPerStrip, unsigned short or long or long long
-			//BT tileLength= (unsigned long) (ifds[index].offset);
-			tileLength = ifds[index].offset;
-			tileWidth = totalX;
-			break;
-		case 282: //XResolution, rational
-			mpiOffset = ifds[index].offset;
-			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-			MPI_File_read( fh, &filedata.xresNum, 4, MPI_BYTE, &status);
-			MPI_File_read( fh, &filedata.xresDen, 4, MPI_BYTE, &status);
-			break;
-		case 283: //YResolution, rational
-			mpiOffset = ifds[index].offset;
-			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-			MPI_File_read( fh, &filedata.yresNum, 4, MPI_BYTE, &status);
-			MPI_File_read( fh, &filedata.yresDen, 4, MPI_BYTE, &status);
-			break;
-		case 284: //PlanarConfiguration, unsigned short
-			//BT filedata.planarConfig = (unsigned short) (ifds[index].offset);
-			filedata.planarConfig = (unsigned short) (ifds[index].offset);
-			break;
-		case 322: //TileWidth, unsigned short or long
-			//BT tileWidth = (unsigned long) (ifds[index].offset);
-			tileWidth = ifds[index].offset;
-			break;
-		case 323: //TileLength, unsigned short or long
-			//BT tileLength = (unsigned long) (ifds[index].offset);
-			tileLength = ifds[index].offset;
-			break;
-		case 324: //TileOffsets, unsigned long
-			tileOrRow = 1;
-			//BT numOffsets = (unsigned long) (ifds[index].count);
-			//BT offsets = (unsigned long long*) malloc( 4 * ifds[index].count );
-			numOffsets = ifds[index].count;
-			//SizeOf offsets = (long*) malloc( 4*ifds[index].count);
-			offsets = (uint32_t*) malloc(sizeof(uint32_t)*ifds[index].count);  //DGT
-			if( ifds[index].count == 1 )
-				offsets[0] = ifds[index].offset;
-			else {
-				mpiOffset = ifds[index].offset;
-				MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-				//BT for( unsigned long i=0; i<ifds[index].count; ++i ) {
-				for( unsigned long i=0; i<ifds[index].count; ++i ) {
-					MPI_File_read( fh, &offsets[i],4,MPI_BYTE, &status);
-				}
-			}
-			break;
-		case 279: //StripByteCounts, unsigned short or long
-		case 325: //TileByteCounts, unsigned short or long
-			//BT bytes = (unsigned long*) malloc( 4*ifds[index].count);
-			//SizeOf bytes = (long*) malloc( 4*ifds[index].count);
-			bytes = (uint32_t*) malloc(sizeof(uint32_t)*ifds[index].count);  //DGT
-			if( ifds[index].count == 1 )
-				bytes[0] = ifds[index].offset;
-			else if( ifds[index].type == 3 ) {
-				short s;
-				//BT for( unsigned long i=0; i<ifds[index].count; ++i) {
-				for( unsigned long i=0; i<ifds[index].count; ++i) {
-					MPI_File_read( fh, &s, 2, MPI_BYTE,&status);
-					bytes[i] = s;
-				}
-			}
-			else if( ifds[index].type == 4) {
-				//BT for( unsigned long i=0; i<ifds[index].count; ++i) {
-				for( unsigned long i=0; i<ifds[index].count; ++i) {
-					MPI_File_read( fh, &bytes[i], 4, MPI_BYTE,&status);
-				}
-			}
-			break;
-		case 339: //SampleFormat, unsigned short, 1=unsigned integer, 2=signed integer, 3=float, 4=undefined
-			if( ifds[index].count > 1) {
-				printf("Error opening file %s.\n", fname);
-				printf("Samples per pixel larger than one. Unable to interpret tiff\n");
-				MPI_Abort(MCW,-6);
-			}
-			sampleFormat = (short) ifds[index].offset;
-			break;
-		case 33550: //GeoTIFF-ModelPixelScaleTag
-			mpiOffset = ifds[index].offset;
-			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-			MPI_File_read( fh, &dx, 8, MPI_BYTE, &status );
-			MPI_File_read( fh, &dy, 8, MPI_BYTE, &status );
-			break;
-		case 33922: //GeoTIFF-ModelTiepointTag
-			mpiOffset = ifds[index].offset;
-			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-			double tempDouble;
-			MPI_File_read( fh, &tempDouble, 8, MPI_BYTE, &status );
-			//printf("%f\t",tempDouble);
-			MPI_File_read( fh, &tempDouble, 8, MPI_BYTE, &status );
-			//printf("%f\t",tempDouble);
-			MPI_File_read( fh, &tempDouble, 8, MPI_BYTE, &status );
-			//printf("%f\n",tempDouble);
-			MPI_File_read( fh, &xleftedge, 8, MPI_BYTE, &status );
-			MPI_File_read( fh, &ytopedge, 8, MPI_BYTE, &status );   
-			break;
-		case 34735: //GeoTIFF-GeoKeyDirectoryTag
-			filedata.geoKeySize = ifds[index].count;
-			//BT filedata.geoKeyDir = (unsigned short *) malloc( 2*filedata.geoKeySize);
-			//SizeOf filedata.geoKeyDir = (short *) malloc( 2*filedata.geoKeySize);
-			filedata.geoKeyDir = (uint16_t *) malloc( sizeof(uint16_t) * filedata.geoKeySize);
-			mpiOffset = ifds[index].offset;
-			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-			//BT for( unsigned long i=0; i<filedata.geoKeySize; ++i) {
-			for( long i=0; i<filedata.geoKeySize; ++i) {
-				MPI_File_read( fh, &filedata.geoKeyDir[i], 2, MPI_BYTE, &status);
-				if (( i >= 4 ) && ( i % 4 == 0 ) && ( filedata.geoKeyDir[i] == 1025 )) {
-					rasterTypeIndex = i;
-				}
-				//printf("%d,",filedata.geoKeyDir[i]);
-			}
-			if ( rasterTypeIndex > 0 ) {
-				origRasterType = filedata.geoKeyDir[rasterTypeIndex + 3];
-				filedata.geoKeyDir[rasterTypeIndex + 3] = 1;
-			}
-			//printf("\n");
-			break;
-		case 34736: //GeoTIFF-GeoDoubleParamsTag
-			filedata.geoDoubleSize = ifds[index].count;
-			//SizeOf filedata.geoDoubleParams = (double*) malloc( 8*filedata.geoDoubleSize );
-			filedata.geoDoubleParams = (double*) malloc( sizeof(double) * filedata.geoDoubleSize );
-			mpiOffset = ifds[index].offset;
-			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-			//BT for( unsigned long i=0; i<filedata.geoDoubleSize; ++i) {
-			for( long i=0; i<filedata.geoDoubleSize; ++i) {
-				MPI_File_read( fh, &filedata.geoDoubleParams[i], 8, MPI_BYTE, &status);
-				//printf("%g,",filedata.geoDoubleParams[i]);
-			}
-			//printf("\n");
-			break;
-		case 34737: //GeoTIFF-GeoAsciiParamsTag
-			//TODO Fix Type Cast of ifds[index].count
-			filedata.geoAsciiSize = ifds[index].count;  
-			//SizeOf filedata.geoAscii = (char*) malloc( filedata.geoAsciiSize );
-			filedata.geoAscii = (char*) malloc( sizeof(char) * (filedata.geoAsciiSize));  
-			if( filedata.geoAscii == NULL ) {
-				printf("Error opening file %s.\n", fname);
-				printf("Memory allocation error.\n");
-				MPI_Abort(MCW,-9);
-			}
-			mpiOffset = ifds[index].offset;
-			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-			//BT MPI_File_read( fh, filedata.geoAscii, (long) ifds[index].count, MPI_BYTE, &status);
-			MPI_File_read( fh, filedata.geoAscii, ifds[index].count, MPI_BYTE, &status);
-			//filedata.geoAscii[ ifds[index].count ] = '\0';
-			//printf("%s\n",filedata.geoAscii);
-			break;	
-		case 42112: //gdalAscii
-			filedata.gdalAsciiSize = ifds[index].count;
-			//SizeOf filedata.gdalAscii = (char*) malloc(ifds[index].count+1);
-			filedata.gdalAscii = (char*) malloc( sizeof(char) * filedata.gdalAsciiSize );
-			if( filedata.gdalAscii == NULL ) {
-				printf("Error opening file %s.\n", fname);
-				printf("Memory allocation error.\n");
-				MPI_Abort(MCW,-9);
-			}
-
-			mpiOffset = ifds[index].offset;
-			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-			MPI_File_read( fh, filedata.gdalAscii, (long) ifds[index].count, MPI_BYTE, &status);
-//			printf("%s\n",filedata.gdalAscii);
-//			filedata.gdalAscii[ ifds[index].count ] = '\0';
-			break;
-		case 42113: //gdalnodata
-			{
-			noDataDef = 1;
-			double noDataDiff=0.0;
-			//If 4 or less bytes of data in tag get nodata value from offset
-			char *noD;
-			if( ifds[index].count <=4 ) 
-				noD = (char*) &ifds[index].offset;
-			else{
-				//SizeOf char *noD = (char*) malloc(ifds[index].count+1);
-				noD = (char*) malloc( sizeof(char) * ifds[index].count+1 );
-				mpiOffset = ifds[index].offset;
-				MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-				//BT MPI_File_read( fh, noD, (int) ifds[index].count, MPI_BYTE, &status);
-				MPI_File_read( fh, noD, ifds[index].count, MPI_BYTE, &status);
-				noD[ ifds[index].count ] = '\0';
-			}
-			//  Set filenodata based on file data type
-			//  This assumes that sampleFormat and dataSizeFileIn have been read already
-			//  The conversions below using atoi are weak because return from atoi is an int.  
-			//  atol could be used for long types, but there do not appear to be ascii to ...
-			//  conversions for all the specific width integers
-			if((sampleFormat == 1) && (dataSizeFileIn == 1)) { 
-				filenodata=new uint8_t;
-				*((uint8_t*)filenodata) = (uint8_t)atoi(noD);
-			} else if ((sampleFormat == 1) && (dataSizeFileIn == 2)) {
-				filenodata=new uint16_t;
-				*((uint16_t*)filenodata) = (uint16_t)atoi(noD);
-			} else if ((sampleFormat == 1) && (dataSizeFileIn == 4)) {
-				filenodata=new uint32_t;
-				*((uint32_t*)filenodata) = (uint32_t)atol(noD);
-			} else if ((sampleFormat == 1) && (dataSizeFileIn == 8)) {
-				filenodata=new uint64_t;
-				*((uint64_t*)filenodata) = (uint64_t)atol(noD);
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 1)) {
-				filenodata = new int8_t;
-				*((int8_t*)filenodata) = (int8_t)atoi(noD);
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 2)) {
-				filenodata=new int16_t;
-				*((int16_t*)filenodata) = (int16_t)atoi(noD);
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 4)) {
-				filenodata=new int32_t;
-				*((int32_t*)filenodata) = (int32_t)atol(noD);
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 8)) {
-				filenodata=new int64_t;
-				*((int64_t*)filenodata) = (int64_t)atol(noD);
-			} else if ((sampleFormat == 3) && (dataSizeFileIn == 4)) {
-				filenodata=new float;
-				*((float*)filenodata) = (float) atof(noD);
-			} else if ((sampleFormat == 3) && (dataSizeFileIn == 8)) {
-				filenodata=new double;
-				*((double*)filenodata) = atof(noD);
-			} else {
-				printf("Error opening file %s.\n", fname);
-				printf("Unsupported TIFF file type or filetype not known when reading nodata tag.  sampleFormat = %d, dataSizeFileIn = %d.\n", sampleFormat, dataSizeFileIn);
-				MPI_Abort(MCW,-1);
-			}
-			// Now map each of the 9 supported file data types onto the 3 supported output data types
-			// Mapping ruled to handle typecasts may need adjusting.
-			// TauDEM often makes the assumption that no data values are negative and less than 
-			// valid data values.  Need to work in the code to do proper nodata checks rather than handling here
-			// For now mapping rules are:
-			// All integer flavors - leave alone, do whatever compiler does
-			// Float to int or short use MISSINGSHORT if float typecast of filenodata differs from value read
-			if( datatype == SHORT_TYPE ) { 
-				nodata = new short;
-				if((sampleFormat == 1) && (dataSizeFileIn == 1)) {
-					*((short*)nodata)=(short)(*((uint8_t*)filenodata));
-				} else if ((sampleFormat == 1) && (dataSizeFileIn == 2)) {
-					*((short*)nodata)=(short)(*((uint16_t*)filenodata));
-				} else if ((sampleFormat == 1) && (dataSizeFileIn == 4)) {
-					*((short*)nodata)=(short)(*((uint32_t*)filenodata));
-				} else if ((sampleFormat == 1) && (dataSizeFileIn == 8)) {
-					*((short*)nodata)=(short)(*((uint64_t*)filenodata));
-				} else if ((sampleFormat == 2) && (dataSizeFileIn == 1)) {
-					*((short*)nodata)=(short)(*((int8_t*)filenodata));
-				} else if ((sampleFormat == 2) && (dataSizeFileIn == 2)) {
-					*((short*)nodata)=(short)(*((int16_t*)filenodata));
-				} else if ((sampleFormat == 2) && (dataSizeFileIn == 4)) {
-					*((short*)nodata)=(short)(*((int32_t*)filenodata));
-				} else if ((sampleFormat == 2) && (dataSizeFileIn == 8)) {
-					*((short*)nodata)=(short)(*((int64_t*)filenodata));
-				} else if ((sampleFormat == 3) && (dataSizeFileIn == 4)) {
-					*((short*)nodata)=(short)(*((float*)filenodata));
-					noDataDiff = *((short*)nodata) - (*((float*)filenodata));
-					if(noDataDiff > 1e-6) (*((short*)nodata))=MISSINGSHORT;
-				} else if ((sampleFormat == 3) && (dataSizeFileIn == 8)) {
-					*((short*)nodata)=(short)(*((double*)filenodata));
-					noDataDiff = *((short*)nodata) - (*((double*)filenodata));
-					if(noDataDiff > 1e-6) (*((short*)nodata))=MISSINGSHORT;
-				} 
-			}
-			else if( datatype == LONG_TYPE) {
-				nodata = new long;
-				if((sampleFormat == 1) && (dataSizeFileIn == 1)) {
-					*((long*)nodata)=(long)(*((uint8_t*)filenodata));
-				} else if ((sampleFormat == 1) && (dataSizeFileIn == 2)) {
-					*((long*)nodata)=(long)(*((uint16_t*)filenodata));
-				} else if ((sampleFormat == 1) && (dataSizeFileIn == 4)) {
-					*((long*)nodata)=(long)(*((uint32_t*)filenodata));
-				} else if ((sampleFormat == 1) && (dataSizeFileIn == 8)) {
-					*((long*)nodata)=(long)(*((uint64_t*)filenodata));
-				} else if ((sampleFormat == 2) && (dataSizeFileIn == 1)) {
-					*((long*)nodata)=(long)(*((int8_t*)filenodata));
-				} else if ((sampleFormat == 2) && (dataSizeFileIn == 2)) {
-					*((long*)nodata)=(long)(*((int16_t*)filenodata));
-				} else if ((sampleFormat == 2) && (dataSizeFileIn == 4)) {
-					*((long*)nodata)=(long)(*((int32_t*)filenodata));
-				} else if ((sampleFormat == 2) && (dataSizeFileIn == 8)) {
-					*((long*)nodata)=(long)(*((int64_t*)filenodata));
-				} else if ((sampleFormat == 3) && (dataSizeFileIn == 4)) {
-					*((long*)nodata)=(long)(*((float*)filenodata));
-					noDataDiff = *((long*)nodata) - (*((float*)filenodata));
-					if(noDataDiff > 1e-6) (*((long*)nodata))=MISSINGLONG;
-				} else if ((sampleFormat == 3) && (dataSizeFileIn == 8)) {
-					*((long*)nodata)=(long)(*((double*)filenodata));
-					noDataDiff = *((long*)nodata) - (*((double*)filenodata));
-					if(noDataDiff > 1e-6) (*((long*)nodata))=MISSINGLONG;
-				} 
-			}
-			else if( datatype == FLOAT_TYPE) {
-				nodata = new float;
-				if((sampleFormat == 1) && (dataSizeFileIn == 1)) {
-					*((float*)nodata)=(float)(*((uint8_t*)filenodata));
-				} else if ((sampleFormat == 1) && (dataSizeFileIn == 2)) {
-					*((float*)nodata)=(float)(*((uint16_t*)filenodata));
-				} else if ((sampleFormat == 1) && (dataSizeFileIn == 4)) {
-					*((float*)nodata)=(float)(*((uint32_t*)filenodata));
-				} else if ((sampleFormat == 1) && (dataSizeFileIn == 8)) {
-					*((float*)nodata)=(float)(*((uint64_t*)filenodata));
-				} else if ((sampleFormat == 2) && (dataSizeFileIn == 1)) {
-					*((float*)nodata)=(float)(*((int8_t*)filenodata));
-				} else if ((sampleFormat == 2) && (dataSizeFileIn == 2)) {
-					*((float*)nodata)=(float)(*((int16_t*)filenodata));
-				} else if ((sampleFormat == 2) && (dataSizeFileIn == 4)) {
-					*((float*)nodata)=(float)(*((int32_t*)filenodata));
-				} else if ((sampleFormat == 2) && (dataSizeFileIn == 8)) {
-					*((float*)nodata)=(float)(*((int64_t*)filenodata));
-				} else if ((sampleFormat == 3) && (dataSizeFileIn == 4)) {
-					*((float*)nodata)=(float)(*((float*)filenodata));
-				} else if ((sampleFormat == 3) && (dataSizeFileIn == 8)) {
-					*((float*)nodata)=(float)(*((double*)filenodata));
-					noDataDiff=abs(*((double*)nodata)-*((double*)filenodata));
-					if(noDataDiff > 1e-6) (*((float*)nodata))=MISSINGFLOAT;
-				} 
-			}
-			}
-			break;
-		default: 
-			{
-//				printf("Unhandled tag: %d\n",ifds[index].tag);
-			}
-			break;
-		}
-	}
-
-	//Adjust grid for PixelIsPoint Raster Space
-	if ( origRasterType==2 ) {
-		xleftedge=xleftedge-dx/2.;
-		ytopedge=ytopedge+dy/2.;
-		if(rank==0)printf("The input file: %s\n",filename);
-		if(rank==0)printf("uses the PixelIsPoint Raster Space convention.  The output files have adjusted \ntop and left edge values for the PixelIsArea default convention.\n");
-		//printf("xleftedge: %f, ytopedge: %f\n", xleftedge, ytopedge);
-	}
-
-	//Compute xllcenter and yllcenter
-	xllcenter=xleftedge+dx/2.;
-	yllcenter=ytopedge-(totalY*dy)-dy/2.;
-
-	//TODO - DGT please add code to also read ESRI no data value
-	if( noDataDef != 1 ) {
-		//printf("Error opening file %s.\n", fname);
-		if(rank==0)printf("NoData not defined. Tiff tag 42113 (GDAL_NODATA) should be defined.\n");
-		//  Assume values
-		if(datatype==SHORT_TYPE)
+	//Calculate the biggest and smallest x and y values.
+	for (int i = 0; i < numFiles; i++){
+		double tol=0.0000001;
+		if(rank==0)  // Only do checks on rank=0 as values are the same in all processors and to limit repeating output
 		{
-			nodata = new short;
-			if((sampleFormat == 1) && (dataSizeFileIn == 1)) { 
-				filenodata=new uint8_t;
-				*((uint8_t*)filenodata) = (uint8_t)255;
-				*((short*)nodata)=(short)(*((uint8_t*)filenodata));
-			} else if ((sampleFormat == 1) && (dataSizeFileIn == 2)) {
-				filenodata=new uint16_t;
-				*((uint16_t*)filenodata) = (uint16_t)32767;
-				*((short*)nodata)=(short)(*((uint16_t*)filenodata));
-			} else if ((sampleFormat == 1) && (dataSizeFileIn == 4)) {
-				filenodata=new uint32_t;
-				*((uint32_t*)filenodata) = (uint32_t)32767;
-				*((short*)nodata)=(short)(*((uint32_t*)filenodata));
-			} else if ((sampleFormat == 1) && (dataSizeFileIn == 8)) {
-				filenodata=new uint64_t;
-				*((uint64_t*)filenodata) = (uint64_t)32767;
-				*((short*)nodata)=(short)(*((uint64_t*)filenodata));
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 1)) {
-				filenodata = new int8_t;
-				*((int8_t*)filenodata) = (int8_t)(-128);
-				*((short*)nodata)=(short)(*((int8_t*)filenodata));
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 2)) {
-				filenodata=new int16_t;
-				*((int16_t*)filenodata) = (int16_t)MISSINGSHORT;
-				*((short*)nodata)=(short)(*((int16_t*)filenodata));
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 4)) {
-				filenodata=new int32_t;
-				*((int32_t*)filenodata) = (int32_t)MISSINGSHORT;
-				*((short*)nodata)=(short)(*((int32_t*)filenodata));
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 8)) {
-				filenodata=new int64_t;
-				*((int64_t*)filenodata) = (int64_t)MISSINGSHORT;
-				*((short*)nodata)=(short)(*((int64_t*)filenodata));
-			} else if ((sampleFormat == 3) && (dataSizeFileIn == 4)) {
-				filenodata=new float;
-				*((float*)filenodata) = (float) MISSINGSHORT;
-				*((short*)nodata)=(short)(*((float*)filenodata));
-			} else if ((sampleFormat == 3) && (dataSizeFileIn == 8)) {
-				filenodata=new double;
-				*((double*)filenodata) = (double) MISSINGSHORT;
-				*((short*)nodata)=(short)(*((double*)filenodata));
+			// Check consistency of dx
+			if(abs(dx-IOfiles[i]->getdx()) > tol*dx) 
+			{
+				printf("dx does not match for all input files: %lf %lf\n",dx,IOfiles[i]->getdx());  
+				MPI_Abort(MCW,7); //dx outside of tolerance.
 			}
-			if(rank==0)printf("The value: %d will be used as representing missing data.\n",*((short*)nodata));
-		}else if(datatype == LONG_TYPE)
+			// Check consistency of dy
+			if(abs(dy-IOfiles[i]->getdy()) > tol*dy) 
+			{
+				printf("dy does not match for all input files: %lf %lf\n",dy,IOfiles[i]->getdy());  
+				MPI_Abort(MCW,7); //dy outside of tolerance.
+			}	
+			//  Check consistency of nodata
+			if( olddatatype == SHORT_TYPE ) {
+				if((*(short*)nodata - *(short*)IOfiles[i]->getNodata()) != 0)
+					printf("Warning! No-Data values across the files do not match!\n%d:%d\n",(*(short*)nodata),(*(short*)IOfiles[i]->getNodata()));
+			}
+			else if( olddatatype == LONG_TYPE) {
+				if((*(long*)nodata - *(long*)IOfiles[i]->getNodata()) != 0)
+					printf("Warning! No-Data values across the files do not match!\n%ld:%ld\n",(*(long*)nodata),(*(long*)IOfiles[i]->getNodata()));
+			}
+			else if( olddatatype == FLOAT_TYPE) {
+				if(abs(*(float*)nodata - *(float*)IOfiles[i]->getNodata()) > (float)tol)
+					printf("Warning! No-Data values across the files do not match!\n%f:%f\n",(*(float*)nodata),(*(float*)IOfiles[i]->getNodata()));
+			}
+		}
+
+		//Set geo bounds for file
+		IOfiles[i]->setgeoystart( IOfiles[i]->getYTopEdge());
+		IOfiles[i]->setgeoyend(IOfiles[i]->getYTopEdge() - IOfiles[i]->getTotalY() * dy);
+		IOfiles[i]->setgeoxstart( IOfiles[i]->getXLeftEdge());
+		IOfiles[i]->setgeoxend( IOfiles[i]->getXLeftEdge() + IOfiles[i]->getTotalX() * dx);
+
+		//Find the max and min geo x and geo y.
+		if(i==0)  // first file
 		{
-			nodata = new long;
-			if((sampleFormat == 1) && (dataSizeFileIn == 1)) { 
-				filenodata=new uint8_t;
-				*((uint8_t*)filenodata) = (uint8_t)255;
-				*((long*)nodata)=(long)(*((uint8_t*)filenodata));
-			} else if ((sampleFormat == 1) && (dataSizeFileIn == 2)) {
-				filenodata=new uint16_t;
-				*((uint16_t*)filenodata) = (uint16_t)32767;
-				*((long*)nodata)=(long)(*((uint16_t*)filenodata));
-			} else if ((sampleFormat == 1) && (dataSizeFileIn == 4)) {
-				filenodata=new uint32_t;
-				*((uint32_t*)filenodata) = (uint32_t)2147483647;
-				*((long*)nodata)=(long)(*((uint32_t*)filenodata));
-			} else if ((sampleFormat == 1) && (dataSizeFileIn == 8)) {
-				filenodata=new uint64_t;
-				*((uint64_t*)filenodata) = (uint64_t)2147483647;
-				*((long*)nodata)=(long)(*((uint64_t*)filenodata));
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 1)) {
-				filenodata = new int8_t;
-				*((int8_t*)filenodata) = (int8_t)(-128);
-				*((long*)nodata)=(long)(*((int8_t*)filenodata));
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 2)) {
-				filenodata=new int16_t;
-				*((int16_t*)filenodata) = (int16_t)MISSINGSHORT;
-				*((long*)nodata)=(long)(*((int16_t*)filenodata));
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 4)) {
-				filenodata=new int32_t;
-				*((int32_t*)filenodata) = (int32_t)MISSINGLONG;
-				*((long*)nodata)=(long)(*((int32_t*)filenodata));
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 8)) {
-				filenodata=new int64_t;
-				*((int64_t*)filenodata) = (int64_t)MISSINGLONG;
-				*((long*)nodata)=(long)(*((int64_t*)filenodata));
-			} else if ((sampleFormat == 3) && (dataSizeFileIn == 4)) {
-				filenodata=new float;
-				*((float*)filenodata) = (float) MISSINGLONG;
-				*((long*)nodata)=(long)(*((float*)filenodata));
-			} else if ((sampleFormat == 3) && (dataSizeFileIn == 8)) {
-				filenodata=new double;
-				*((double*)filenodata) = (double) MISSINGLONG;
-				*((long*)nodata)=(long)(*((double*)filenodata));
-			}
-			if(rank==0)printf("The value: %d will be used as representing missing data.\n",*((long*)nodata));
+			MaxY = IOfiles[i]->getgeoystart();
+			MaxX = IOfiles[i]->getgeoxend();
+			MinX = IOfiles[i]->getgeoxstart();
+			MinY = IOfiles[i]->getgeoyend();
 		}
 		else
 		{
-			nodata = new float;
-			if((sampleFormat == 1) && (dataSizeFileIn == 1)) { 
-				filenodata=new uint8_t;
-				*((uint8_t*)filenodata) = (uint8_t)255;
-				*((float*)nodata)=(float)(*((uint8_t*)filenodata));
-			} else if ((sampleFormat == 1) && (dataSizeFileIn == 2)) {
-				filenodata=new uint16_t;
-				*((uint16_t*)filenodata) = (uint16_t)32767;
-				*((float*)nodata)=(float)(*((uint16_t*)filenodata));
-			} else if ((sampleFormat == 1) && (dataSizeFileIn == 4)) {
-				filenodata=new uint32_t;
-				*((uint32_t*)filenodata) = (uint32_t)4294967295;
-				*((float*)nodata)=(float)(*((uint32_t*)filenodata));
-			} else if ((sampleFormat == 1) && (dataSizeFileIn == 8)) {
-				filenodata=new uint64_t;
-				*((uint64_t*)filenodata) = ((uint64_t)(4294967296))*((uint64_t)(4294967295))+((uint64_t)(4294967295));
-				*((float*)nodata)=(float)(*((uint64_t*)filenodata));
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 1)) {
-				filenodata = new int8_t;
-				*((int8_t*)filenodata) = (int8_t)(-128);
-				*((float*)nodata)=(float)(*((int8_t*)filenodata));
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 2)) {
-				filenodata=new int16_t;
-				*((int16_t*)filenodata) = (int16_t)(MISSINGSHORT);
-				*((float*)nodata)=(float)(*((int16_t*)filenodata));
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 4)) {
-				filenodata=new int32_t;
-				*((int32_t*)filenodata) = (int32_t)MISSINGLONG;
-				*((float*)nodata)=(float)(*((int32_t*)filenodata));
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 8)) {
-				filenodata=new int64_t;
-				*((int64_t*)filenodata) = (int64_t)MISSINGLONG;
-				*((float*)nodata)=(float)(*((int64_t*)filenodata));
-			} else if ((sampleFormat == 3) && (dataSizeFileIn == 4)) {
-				filenodata=new float;
-				*((float*)filenodata) = MISSINGFLOAT;
-				*((float*)nodata)=(float)(*((float*)filenodata));
-			} else if ((sampleFormat == 3) && (dataSizeFileIn == 8)) {
-				filenodata=new double;
-				*((double*)filenodata) = MISSINGFLOAT;
-				*((float*)nodata)=(float)(*((double*)filenodata));
-			}
-			if(rank==0)printf("The value: %g will be used as representing missing data.\n",*((float*)nodata));
+			if(MaxY < IOfiles[i]->getgeoystart())
+				MaxY = IOfiles[i]->getgeoystart();
+			if(MaxX < IOfiles[i]->getgeoxend())
+				MaxX = IOfiles[i]->getgeoxend();
+			if(MinX > IOfiles[i]->getgeoxstart())
+				MinX = IOfiles[i]->getgeoxstart();
+			if(MinY > IOfiles[i]->getgeoyend())
+				MinY = IOfiles[i]->getgeoyend();
 		}
-		//MPI_Abort(MCW,-5);
 	}
+	//Calculate the global total x and global total y rounding double geo coordinates to long.
+	gTotalY = (long)((MaxY - MinY)/dy+0.5);
+	gTotalX = (long)((MaxX - MinX)/dx+0.5);
+// Calculate global/domain values from geographic coordinates.
+	for(int i = 0; i < numFiles; i++){
+		IOfiles[i]->setgystart( (uint32_t)((MaxY - IOfiles[i]->getgeoystart()) / dy+0.5));
+		IOfiles[i]->setgyend((uint32_t)((MaxY-IOfiles[i]->getgeoyend()) / dy-0.5));
+		//  The end values are -0.5 to refer the last row/col of the file using start from 0 C indexing
+		// +0.5 -1 = -0.5
+		IOfiles[i]->setgxstart((uint32_t)((IOfiles[i]->getgeoxstart() - MinX) / dx+0.5));
+		IOfiles[i]->setgxend((uint32_t)((IOfiles[i]->getgeoxend() - MinX) / dx-0.5));
+
+		//  Debugging
+		//if(rank==7)
+		//{
+		//	printf("%d: %s\n",i,files[i]);					
+		//	if( olddatatype == SHORT_TYPE ) {
+		//		printf("%d\n",*(short*)IOfiles[i]->getNodata());
+		//	}
+		//	else if( olddatatype == LONG_TYPE) {
+		//		printf("%ld\n",*(long*)IOfiles[i]->getNodata());
+		//	}
+		//	else if( olddatatype == FLOAT_TYPE) {
+		//		printf("%g\n",*(float*)IOfiles[i]->getNodata());
+		//	}
+		//	printf("%d %d %d %d\n",IOfiles[i]->getgystart(),IOfiles[i]->getgyend(),IOfiles[i]->getgxstart(),IOfiles[i]->getgxend());
+		//}
+
+	}
+	
+	// Assign synonym variables that are used by the object.
+	ytop = MaxY;
+	xleft = MinX; 
+	xleftedge=MinX;
+	ytopedge=MaxY;
+
+	//calculate the xllcenter and yllcenter. 
+        xllcenter=xleftedge+dx/2.;
+        yllcenter=ytopedge-(gTotalY*dy)-dy/2.;
+
+	long partStart = (gTotalY / size) * rank;
+	long partEnd = (gTotalY / size) * (rank + 1);
+	readwrite = 0;
+	//if(rank == 0)
+	//	cout << "Constructor End" << endl;
 }
 
 //Copy constructor.  Requires datatype in addition to the object to copy from.
-tiffIO::tiffIO(char *fname, DATA_TYPE newtype, void* nd, const tiffIO &copy) {
-	//MPI_Status status;
-	//MPI_Offset mpiOffset;
-
+//initialize to write out.
+tiffIO::tiffIO(char *dirname, DATA_TYPE newtype, void* nd, const tiffIO &copy) {
 	MPI_Comm_size(MCW, &size);
 	MPI_Comm_rank(MCW, &rank);
-	
-	//Create/open the output file
-	int file_error = MPI_File_open( MCW, fname, MPI_MODE_WRONLY | MPI_MODE_CREATE, MPI_INFO_NULL, &fh);
-	if(file_error != MPI_SUCCESS){
-		printf("Error opening file %s.\n",fname);
-		MPI_Abort(MCW,22);
-	}
-	
-	//Copy metadata from copy tiffIO object
-	//TODO: ALL metadata needs to be copied here
-	numEntries = copy.numEntries;
-	ifds = (ifd*) malloc( sizeof(ifd) * numEntries );
-	memcpy( ifds, copy.ifds, sizeof(ifd) * numEntries );
-	numOffsets = copy.numOffsets;
-	//don't need offset or byte arrays since copied file will never do a data read
-	version = copy.version;
-	tileOrRow = copy.tileOrRow;
-	tileLength = copy.tileLength;
-	tileWidth = copy.tileWidth;
-	totalX = copy.totalX;
-	totalY = copy.totalY;
-	dx = copy.dx;
-	dy = copy.dy;
-	xllcenter = copy.xllcenter;
-	yllcenter = copy.yllcenter;
+//	if(rank == 0)
+//                cout << "Copy Constructor Start" << endl;
 	xleftedge = copy.xleftedge;
 	ytopedge = copy.ytopedge;
-
+	xllcenter = copy.xllcenter;
+	yllcenter = copy.yllcenter;
+	xleft = copy.xleft;
+	ytop = copy.ytop;
+	dx = copy.dx;
+	dy = copy.dy;
+	gTotalX = copy.gTotalX;
+	gTotalY = copy.gTotalY;
+	strncpy(dirn, dirname, NAME_MAX);
+	numFiles = 1;
+	dir = NULL;
+	drnt = NULL;
+	nodata = nd;
 	datatype = newtype;
-	if( datatype == SHORT_TYPE ) {
-		nodata = new short;
-		*((short*)nodata) = *((short*)nd);
-	}
-	else if( datatype == LONG_TYPE) {
-		nodata = new long;
-		*((long*)nodata) = *((long*)nd);
-	}
-	else if( datatype == FLOAT_TYPE) {
-		nodata = new float;
-		*((float*)nodata) = *((float*)nd);
-	}
+	int makeDir = 0;
 
-	filedata = copy.filedata;
-	if( filedata.geoAsciiSize > 0 ) {
-		//SizeOf filedata.geoAscii = (char*) malloc ( filedata.geoAsciiSize);
-		filedata.geoAscii = (char*) malloc ( sizeof(char) * filedata.geoAsciiSize );
-		//strncpy(filedata.geoAscii, copy.filedata.geoAscii, filedata.geoAsciiSize );
-		memcpy( filedata.geoAscii, copy.filedata.geoAscii, filedata.geoAsciiSize );
-	}
-	if( filedata.gdalAsciiSize > 0 ) {
-		//SizeOf filedata.gdalAscii = (char*) malloc ( filedata.gdalAsciiSize);
-		filedata.gdalAscii = (char*) malloc ( sizeof(char) * filedata.gdalAsciiSize );
-		//strncpy(filedata.gdalAscii, copy.filedata.gdalAscii, filedata.gdalAsciiSize );
-		memcpy( filedata.gdalAscii, copy.filedata.gdalAscii, filedata.gdalAsciiSize );
-	}
-	if( filedata.geoKeySize > 0 ) {
-		//BT filedata.geoKeyDir = (unsigned short*) malloc ( filedata.geoKeySize * 2);
-		//SizeOf filedata.geoKeyDir = (short*) malloc ( filedata.geoKeySize * 2);
-		filedata.geoKeyDir = (uint16_t*) malloc ( sizeof(uint16_t) * filedata.geoKeySize * 2);
-		memcpy( filedata.geoKeyDir, copy.filedata.geoKeyDir, filedata.geoKeySize * 2);
-	}
-	if( filedata.geoDoubleSize > 0 ) {
-		//SizeOf filedata.geoDoubleParams = (double*) malloc ( 8 * filedata.geoDoubleSize);
-		filedata.geoDoubleParams = (double*) malloc ( sizeof(double) * filedata.geoDoubleSize );
-		memcpy( filedata.geoDoubleParams, copy.filedata.geoDoubleParams, filedata.geoDoubleSize*8 );
-	}
-	//  These copies are after the filedata=copy.filedata above
-	//  so that they overwrite the datatype from the copied file
-	if( datatype == SHORT_TYPE ) {
-		dataSizeObj = sizeof (short);
-	}
-	else if( datatype == LONG_TYPE) {
-		dataSizeObj = sizeof (int32_t);  // DGT Writing long as 32 bit because ArcGIS and GDAL do not appear to support reading of 8 byte (64 bit) integer grids
-	}
-	else if( datatype == FLOAT_TYPE) {
-		dataSizeObj = sizeof (float);
-	}
-	//Update GeoTiff GeoKeyDirectoryTag to always output GTRasterTypeGeoKey as PixelIsArea
-	for ( long i=4; i<filedata.geoKeySize; i+=4) {
-		if ( filedata.geoKeyDir[i] == 1025 ) {
-			filedata.geoKeyDir[i + 3] = 1;
+	// Make sure each process has a directory to write to.  Do this in a loop to accommodate the case of local disks
+	// that may serve a subset of the processes that will also need the directory created.
+	for(int i = 0; i < size; i++){
+		if(rank == i){
+			if((dir = opendir(dirname))==NULL)
+			{
+				//  The block below so that correct platform dependent mkdir is used
+				#ifdef  _MSC_VER  //  Microsoft compiler
+					int a = mkdir(dirname);
+				#else
+					int a = mkdir(dirname, S_IRWXU | S_IRWXG | S_IRWXO);
+				#endif
+				if(a != 0){
+					printf("Failed to create directory '%s'\n", dirn); fflush(stdout);
+					MPI_Abort(MCW,103);
+				}
+				//printf("Created directory '%s'\n", dirn);
+				if((dir = opendir(dirname))==NULL)  // Check that we can open directory after creation
+				{
+					printf("Failed to open directory after creation '%s'\n", dirn); fflush(stdout);
+					MPI_Abort(MCW,103);
+				}
+				closedir(dir);
+			}
 		}
+		MPI_Barrier(MCW); // Dont proceed untill all processes get here (and directory has been created in proccess i, opened and closed)
+
 	}
+	readwrite = 1;
+	IOfiles = new tifFile*[1];
+	files = new char*[1];
+	files[0] = new char[NAME_MAX];
+	strncpy(files[0],copy.dirn,NAME_MAX);
+	strncpy(files[0],"/",2);
+	numFiles = 1;
+	IOfiles[0] = new tifFile(strncpy(files[0],copy.files[0],NAME_MAX),datatype,nd,*copy.IOfiles[0], true);
+	fileX = copy.fileX;
+	fileY = copy.fileY;
+	//closedir(dir);
+	/*if(rank == 0)
+                cout << "Copy Constructor End" << endl;*/
 }
 
 tiffIO::~tiffIO(){
-	MPI_File_close(&fh);
+	//delete all files...
+	if(readwrite == 1){//if it was copy constructed delete what was allocated.
+		delete IOfiles[0];
+		delete IOfiles;
+		delete files[0];
+		delete files;
+		return;
+	}
+	for(int i =0; i < numFiles; i++){
+		delete files[i];
+		delete IOfiles[i];
+	}
+	delete files;
+	delete IOfiles;
 }
 
-//Read tiff file data/image values beginning at xstart, ystart (gridwide coordinates) for the numRows, and numCols indicated to memory locations specified by dest
-//BT void tiffIO::read(unsigned long long xstart, unsigned long long ystart, unsigned long long numRows, unsigned long long numCols, void* dest) {
-void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* dest) {
+void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* dest){//, long partOffset, long DomainX) {
+	//read in multiple files
+	long partStart = (gTotalY / size) * rank;
+	long partEnd = (gTotalY / size) * (rank + 1);
+	if(rank == size -1)
+		partEnd += (gTotalY - size*((long)(gTotalY / size)));
+	//  partEnd as used here is actually the index of the first row in the next partition
+	for(int i =0 ; i < numFiles; i++){//TODO adjust for not reading in a full part. assumes read in all x values for a part and all y values for a part.
+		uint32_t filegystart=IOfiles[i]->getgystart();
+		uint32_t filegyend=IOfiles[i]->getgyend();
+		uint32_t filegxstart=IOfiles[i]->getgxstart();
+		uint32_t numy,numx;
+		numy=IOfiles[i]->getTotalY();
+		numx=IOfiles[i]->getTotalX();
 
-	//current code assumes Tiff uses Strips and Partition Type is Linear Partition; TODO - recode to eliminate these assumptions
-
-	MPI_Status status;
-	MPI_Offset mpiOffset;
-	if(tileOrRow == 2)  
-	{  // Strips
-
- 	//Find the starting and ending indexes of the data requested
-//	long firstStripIndex = (long) floor(ystart/tileLength);  //index into tiff strip arrays of first strip to be read 
-//	long lastStripIndex = (long) floor((ystart + numRows)/tileLength ); //index into tiff strip arrays of the last strip to be read
-	long firstStripIndex = ystart/tileLength;  //index into tiff strip arrays of first strip to be read 
-	long lastStripIndex = (ystart + numRows-1)/tileLength ; //index into tiff strip arrays of the last strip to be read
-	long firstStripFirstRowIndex = ystart - ( firstStripIndex * tileLength); //index within the first tiff strip of the first row to be read
-	long lastStripLastRowIndex = ystart + numRows-1 - ( lastStripIndex * tileLength ); //index within the last tiff strip of the last row to be read
-
-	//Find the initial current strip indexes
-	long currentStripFirstRowIndex = firstStripFirstRowIndex;  //index of first row needed within current strip; start with first strip needed
-	long currentStripLastRowIndex;  // index of last row needed within current strip; start with first strip needed
-	if ((lastStripIndex - firstStripIndex) > 0) { //7/24/13 DGT added condition of firstStripIndex to account for partitions entirely within a strip
-		currentStripLastRowIndex = tileLength-1;
-	} else{
-		currentStripLastRowIndex = lastStripLastRowIndex;
-	}
-    //printf("Rank %d, firstSI %d, LastSI %d, firstrow %d, lastrow %d, ystart %d, numrows %d, tilelen %d, currstlastrow %d\n",rank,firstStripIndex,lastStripIndex,firstStripFirstRowIndex, 
-		//lastStripLastRowIndex,ystart,numRows,tileLength,currentStripLastRowIndex);
-	//loop through needed TIFF Strips
-	for( long i = firstStripIndex; i <= lastStripIndex; ++i ) {
-		mpiOffset = offsets[i];
-		MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-		mpiOffset = dataSizeFileIn * tileWidth * currentStripFirstRowIndex;
-		MPI_File_seek( fh, mpiOffset, MPI_SEEK_CUR);
-		//loop through needed rows
-		for( long j = currentStripFirstRowIndex; j <= currentStripLastRowIndex; ++j) {
-			//  A separate block of code is needed for each supported input file type
-			//  because even if we read into a void variable we still need the logic that
-			//  determines how to interpret the read data to be able to typecast it onto
-			//  the output file type  
-			long rowbeginning=(j+(i*tileLength)-ystart)*tileWidth;
-			//printf("Rank %d, strip %d, striprow %d, rowbeginning %d\n",rank,i,j,rowbeginning);
-			//fflush(stdout);
-			if((sampleFormat == 1) && (dataSizeFileIn == 1)) {
-				uint8_t *tempDataRow= new uint8_t[tileWidth];
-				MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileWidth, MPI_BYTE, &status);
-				if(datatype == SHORT_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						uint8_t tempVal = tempDataRow[k];
-						if(tempVal == *(uint8_t*)filenodata) 
-							((short*)dest)[rowbeginning+k]= *(short*)nodata;
-						else
-							((short*)dest)[rowbeginning+k]=(short)tempVal;
-					}
-				else if(datatype == LONG_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						uint8_t tempVal = tempDataRow[k];
-						if(tempVal == *(uint8_t*)filenodata)  
-							((long*)dest)[rowbeginning+k]= *(long*)nodata;
-						else
-							((long*)dest)[rowbeginning+k]=(long)tempVal;
-					}
-				else if(datatype == FLOAT_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						uint8_t tempVal = tempDataRow[k];
-						if(tempVal == *(uint8_t*)filenodata)  
-							((float*)dest)[rowbeginning+k]= *(float*)nodata;
-						else
-							((float*)dest)[rowbeginning+k]=(float)tempVal;
-					}
-				delete tempDataRow;
-			} else if ((sampleFormat == 1) && (dataSizeFileIn == 2)) {
-				uint16_t *tempDataRow= new uint16_t[tileWidth];
-				MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileWidth, MPI_BYTE, &status);
-				if(datatype == SHORT_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						uint16_t tempVal = tempDataRow[k];
-						if(tempVal == *(uint16_t*)filenodata) 
-							((short*)dest)[rowbeginning+k]= *(short*)nodata;
-						else
-							((short*)dest)[rowbeginning+k]=(short)tempVal;
-					}
-				else if(datatype == LONG_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						uint16_t tempVal = tempDataRow[k];
-						if(tempVal == *(uint16_t*)filenodata)  
-							((long*)dest)[rowbeginning+k]= *(long*)nodata;
-						else
-							((long*)dest)[rowbeginning+k]=(long)tempVal;
-					}
-				else if(datatype == FLOAT_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						uint16_t tempVal = tempDataRow[k];
-						if(tempVal == *(uint16_t*)filenodata)  
-							((float*)dest)[rowbeginning+k]= *(float*)nodata;
-						else
-							((float*)dest)[rowbeginning+k]=(float)tempVal;
-					}
-				delete tempDataRow;
-			} else if ((sampleFormat == 1) && (dataSizeFileIn == 4)) {
-				uint32_t *tempDataRow= new uint32_t[tileWidth];
-				MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileWidth, MPI_BYTE, &status);
-				if(datatype == SHORT_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						uint32_t tempVal = tempDataRow[k];
-						if(tempVal == *(uint32_t*)filenodata) 
-							((short*)dest)[rowbeginning+k]= *(short*)nodata;
-						else
-							((short*)dest)[rowbeginning+k]=(short)tempVal;
-					}
-				else if(datatype == LONG_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						uint32_t tempVal = tempDataRow[k];
-						if(tempVal == *(uint32_t*)filenodata)  
-							((long*)dest)[rowbeginning+k]= *(long*)nodata;
-						else
-							((long*)dest)[rowbeginning+k]=(long)tempVal;
-					}
-				else if(datatype == FLOAT_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						uint32_t tempVal = tempDataRow[k];
-						if(tempVal == *(uint32_t*)filenodata)  
-							((float*)dest)[rowbeginning+k]= *(float*)nodata;
-						else
-							((float*)dest)[rowbeginning+k]=(float)tempVal;
-					}
-				delete tempDataRow;
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 1)) {
-				int8_t* tempDataRow = new int8_t[tileWidth];
-				MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileWidth, MPI_BYTE, &status);
-				if(datatype == SHORT_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						int8_t tempVal = tempDataRow[k];
-						if(tempVal == *(int8_t*)filenodata) 
-							((short*)dest)[rowbeginning+k]= *(short*)nodata;
-						else
-							((short*)dest)[rowbeginning+k]=(short)tempVal;
-					}
-				else if(datatype == LONG_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						int8_t tempVal = tempDataRow[k];
-						if(tempVal == *(int8_t*)filenodata)  
-							((long*)dest)[rowbeginning+k]= *(long*)nodata;
-						else
-							((long*)dest)[rowbeginning+k]=(long)tempVal;
-					}
-				else if(datatype == FLOAT_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						int8_t tempVal = tempDataRow[k];
-						if(tempVal == *(int8_t*)filenodata)  
-							((float*)dest)[rowbeginning+k]= *(float*)nodata;
-						else
-							((float*)dest)[rowbeginning+k]=(float)tempVal;
-					}
-				delete tempDataRow;
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 2)) {
-				int16_t* tempDataRow = new int16_t[tileWidth];
-				MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileWidth, MPI_BYTE, &status);
-				if(datatype == SHORT_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						int16_t tempVal = tempDataRow[k];
-						if(tempVal == *(int16_t*)filenodata) 
-							((short*)dest)[rowbeginning+k]= *(short*)nodata;
-						else
-							((short*)dest)[rowbeginning+k]=(short)tempVal;
-					}
-				else if(datatype == LONG_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						int16_t tempVal = tempDataRow[k];
-						if(tempVal == *(int16_t*)filenodata)  
-							((long*)dest)[rowbeginning+k]= *(long*)nodata;
-						else
-							((long*)dest)[rowbeginning+k]=(long)tempVal;
-					}
-				else if(datatype == FLOAT_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						int16_t tempVal = tempDataRow[k];
-						if(tempVal == *(int16_t*)filenodata)  
-							((float*)dest)[rowbeginning+k]= *(float*)nodata;
-						else
-							((float*)dest)[rowbeginning+k]=(float)tempVal;
-					}
-				delete tempDataRow;
-			} else if ((sampleFormat == 2) && (dataSizeFileIn == 4)) {
-				int32_t* tempDataRow = new int32_t[tileWidth];
-				MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileWidth, MPI_BYTE, &status);
-				if(datatype == SHORT_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						int32_t tempVal = tempDataRow[k];
-						if(tempVal == *(int32_t*)filenodata) 
-							((short*)dest)[rowbeginning+k]= *(short*)nodata;
-						else
-							((short*)dest)[rowbeginning+k]=(short)tempVal;
-					}
-				else if(datatype == LONG_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						int32_t tempVal = tempDataRow[k];
-						if(tempVal == *(int32_t*)filenodata)  
-							((long*)dest)[rowbeginning+k]= *(long*)nodata;
-						else
-							((long*)dest)[rowbeginning+k]=(long)tempVal;
-					}
-				else if(datatype == FLOAT_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						int32_t tempVal = tempDataRow[k];
-						if(tempVal == *(int32_t*)filenodata)  
-							((float*)dest)[rowbeginning+k]= *(float*)nodata;
-						else
-							((float*)dest)[rowbeginning+k]=(float)tempVal;
-					}
-				delete tempDataRow;
-			} else if ((sampleFormat == 3) && (dataSizeFileIn == 4)) {
-				float *tempDataRow= new float[tileWidth];
-				MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileWidth, MPI_BYTE, &status);
-				if(datatype == SHORT_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						float tempVal = tempDataRow[k];
-						if(tempVal == *(float*)filenodata)  // Risky conditional on float
-							((short*)dest)[rowbeginning+k]= *(short*)nodata;
-						else
-							((short*)dest)[rowbeginning+k]=(short)tempVal;
-					}
-				else if(datatype == LONG_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						float tempVal = tempDataRow[k];
-						if(tempVal == *(float*)filenodata)  // Risky conditional on float
-							((long*)dest)[rowbeginning+k]= *(long*)nodata;
-						else
-							((long*)dest)[rowbeginning+k]=(long)tempVal;
-					}
-				else if(datatype == FLOAT_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						float tempVal = tempDataRow[k];
-						if(tempVal == *(float*)filenodata)  // Risky conditional on float
-							((float*)dest)[rowbeginning+k]= *(float*)nodata;
-						else
-							((float*)dest)[rowbeginning+k]=(float)tempVal;
-					}
-				delete tempDataRow;
-			} else if ((sampleFormat == 3) && (dataSizeFileIn == 8)) {
-				double *tempDataRow= new double[tileWidth];
-				MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileWidth, MPI_BYTE, &status);
-				if(datatype == SHORT_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						double tempVal = tempDataRow[k];
-						if(tempVal == *(double*)filenodata)  // Risky conditional on float
-							((short*)dest)[rowbeginning+k]= *(short*)nodata;
-						else
-							((short*)dest)[rowbeginning+k]=(short)tempVal;
-					}
-				else if(datatype == LONG_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						double tempVal = tempDataRow[k];
-						if(tempVal == *(double*)filenodata)  // Risky conditional on float
-							((long*)dest)[rowbeginning+k]= *(long*)nodata;
-						else
-							((long*)dest)[rowbeginning+k]=(long)tempVal;
-					}
-				else if(datatype == FLOAT_TYPE)
-					for(long k = 0; k < tileWidth; k++)
-					{
-						double tempVal = tempDataRow[k];
-						if(tempVal == *(double*)filenodata)  // Risky conditional on float
-							((float*)dest)[rowbeginning+k]= *(float*)nodata;
-						else
-							((float*)dest)[rowbeginning+k]=(float)tempVal;
-					}
-				delete tempDataRow;
-			} else {
-				printf("Unsupported TIFF file type.  sampleFormat = %d, dataSizeFileIn = %d.\n", sampleFormat, dataSizeFileIn);
-				MPI_Abort(MCW,-1);
-			}
+		if(filegystart >= partStart && filegyend < partEnd){//file is only in this partition.
+			IOfiles[i]->read(	
+				0,//xstart,//xstart
+				0,//ystart,//ystart
+				numy,  // numRows to read
+				numx,  // numCols to read
+				dest,  // Destination of partition in memory, i.e. top left cell of partition
+				gTotalX * (filegystart - partStart) + filegxstart,// Offset from beginning of partition to beginning of this file
+				gTotalX);//x jump factor
+		}else if(filegystart >= partStart && filegystart < partEnd && filegyend >= partEnd){//top of file in this partition
+			IOfiles[i]->read(       
+				0,
+				0,
+				partEnd - filegystart,
+				numx,
+				dest,
+				gTotalX * (filegystart - partStart) + filegxstart,
+				gTotalX);
+		}else if(filegystart < partStart && filegyend < partEnd && filegyend >= partStart){//bottom of file in this partition
+			IOfiles[i]->read(       
+				0,
+				partStart-filegystart, 
+				numy-(partStart-filegystart),
+				numx,
+				dest,
+				filegxstart,
+				gTotalX);
+		}else if(filegystart < partStart && filegyend >= partEnd){//This file spans the whole partition.
+			IOfiles[i]->read(       
+				0,
+				partStart - filegystart,
+				partEnd - partStart,
+				numx,
+				dest,
+				filegxstart,
+				gTotalX);
+		}else{//file doesn't span any of the partition
+			//do nothing
 		}
-		//update current strip indexes for next strip
-		currentStripFirstRowIndex = 0;
-		if ( i != lastStripIndex-1 ) {
-			currentStripLastRowIndex = tileLength-1;
-		}else {
-			currentStripLastRowIndex = lastStripLastRowIndex;
+		if(numy * numx > fileX * fileY){// calculate bigest file and use it as output file size.
+			fileY = numy;
+			fileX = numx;
+		}
+		//get global xleft and ytop
+		if(xleft > IOfiles[i]->getXLeftEdge()){//min x
+			xleft = IOfiles[i]->getXLeftEdge();
+			xleftedge = xleft;
+		}
+		if(ytop < IOfiles[i]->getYTopEdge()){  //max y
+			ytop = IOfiles[i]->getYTopEdge();
+			ytopedge = ytop;
 		}
 	}
-	}
-	else
-	{  // tiles.  The strategy is to read one row at a time reading the parts 
-		// of it that come from the appropriate tiles as blocks
-		uint32_t y, tileStart, tilesAcross, tileEnd, tile, rowInTile, tileCols, destOffset;
+	//calculate xllcenter and yllcenter.
+	xllcenter=xleftedge+dx/2.;
+	yllcenter=ytopedge-(gTotalY*dy)-dy/2.;
+	//if(rank == 0)
+ //               cout << "IO Read  End" << endl;
 
-		// tileStart - the first tile in the set being read from for row y
-		// tilesAcross - the number of tiles across the grid
-		// tileEnd - the last tile in the set being read form for row y
-		// tile - the active tile being read from
-		// rowInTile - the row in the tile corresponding to the tile being read
-		// tileCols - the number of columns in the tile that fall within the grid
-		//    This is either tileWidth or determined from totalX for the last tile
-		// destOffset - the offset within the destination partition of the row being read for a tile
-
-		tilesAcross=(totalX-1)/tileWidth+1;  // DGT 7/8/10 - was tilesAcross=totalX/tileWidth+1 which failed if totalX was a multiple of tileWidth
-		for(y=ystart; y<ystart+numRows; y++)
-		{
-			tileStart=y/tileLength*tilesAcross;  // First tile in the read of a row
-			if(tileStart > 0)
-				tileStart=tileStart;
-			tileEnd=tileStart+tilesAcross-1;   // Last tile in the read of a row
-			rowInTile=y-(tileStart/tilesAcross)*tileLength;
-			for(tile=tileStart; tile<=tileEnd;tile++)
-			{
-				tileCols = tileWidth;
-				if(tile == tileEnd)tileCols=totalX-(tilesAcross-1)*tileWidth;
-				mpiOffset=offsets[tile]+rowInTile*tileWidth*dataSizeFileIn;
-				MPI_File_seek(fh,mpiOffset,MPI_SEEK_SET);
-				destOffset=(tile-tileStart)*tileWidth+(y-ystart)*numCols;
-				if((sampleFormat == 1) && (dataSizeFileIn == 1)) 
-				{
-					uint8_t *tempDataRow= new uint8_t[tileWidth];
-					MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileCols, MPI_BYTE, &status);
-					if(datatype == SHORT_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							uint8_t tempVal = tempDataRow[k];
-							if(tempVal == *(uint8_t*)filenodata)  // Risky conditional on float
-								((short*)dest)[destOffset+k]= *(short*)nodata;
-							else
-								((short*)dest)[destOffset+k]=(short)tempVal;
-						}
-					else if(datatype == LONG_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							uint8_t tempVal = tempDataRow[k];
-							if(tempVal == *(uint8_t*)filenodata)  // Risky conditional on float
-								((long*)dest)[destOffset+k]= *(long*)nodata;
-							else
-								((long*)dest)[destOffset+k]=(long)tempVal;
-						}
-					else if(datatype == FLOAT_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							uint8_t tempVal = tempDataRow[k];
-							if(tempVal == *(uint8_t*)filenodata)  // Risky conditional on float
-								((float*)dest)[destOffset+k]= *(float*)nodata;
-							else
-								((float*)dest)[destOffset+k]=(float)tempVal;
-						}
-					delete tempDataRow;
-				}
-				else if ((sampleFormat == 1) && (dataSizeFileIn == 2)) 
-				{
-					uint16_t *tempDataRow= new uint16_t[tileWidth];
-					MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileCols, MPI_BYTE, &status);
-					if(datatype == SHORT_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							uint16_t tempVal = tempDataRow[k];
-							if(tempVal == *(uint16_t*)filenodata)  // Risky conditional on float
-								((short*)dest)[destOffset+k]= *(short*)nodata;
-							else
-								((short*)dest)[destOffset+k]=(short)tempVal;
-						}
-					else if(datatype == LONG_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							uint16_t tempVal = tempDataRow[k];
-							if(tempVal == *(uint16_t*)filenodata)  // Risky conditional on float
-								((long*)dest)[destOffset+k]= *(long*)nodata;
-							else
-								((long*)dest)[destOffset+k]=(long)tempVal;
-						}
-					else if(datatype == FLOAT_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							uint16_t tempVal = tempDataRow[k];
-							if(tempVal == *(uint16_t*)filenodata)  // Risky conditional on float
-								((float*)dest)[destOffset+k]= *(float*)nodata;
-							else
-								((float*)dest)[destOffset+k]=(float)tempVal;
-						}
-					delete tempDataRow;
-				}
-				else if ((sampleFormat == 1) && (dataSizeFileIn == 4)) 
-				{
-					uint32_t *tempDataRow= new uint32_t[tileWidth];
-					MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileCols, MPI_BYTE, &status);
-					if(datatype == SHORT_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							uint32_t tempVal = tempDataRow[k];
-							if(tempVal == *(uint32_t*)filenodata)  // Risky conditional on float
-								((short*)dest)[destOffset+k]= *(short*)nodata;
-							else
-								((short*)dest)[destOffset+k]=(short)tempVal;
-						}
-					else if(datatype == LONG_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							uint32_t tempVal = tempDataRow[k];
-							if(tempVal == *(uint32_t*)filenodata)  // Risky conditional on float
-								((long*)dest)[destOffset+k]= *(long*)nodata;
-							else
-								((long*)dest)[destOffset+k]=(long)tempVal;
-						}
-					else if(datatype == FLOAT_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							uint32_t tempVal = tempDataRow[k];
-							if(tempVal == *(uint32_t*)filenodata)  // Risky conditional on float
-								((float*)dest)[destOffset+k]= *(float*)nodata;
-							else
-								((float*)dest)[destOffset+k]=(float)tempVal;
-						}
-					delete tempDataRow;
-				}
-				else if ((sampleFormat == 2) && (dataSizeFileIn == 1)) 
-				{
-					int8_t* tempDataRow = new int8_t[tileWidth];
-					MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileCols, MPI_BYTE, &status);
-
-					if(datatype == SHORT_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							int8_t tempVal = tempDataRow[k];
-							if(tempVal == *(int8_t*)filenodata)  // Risky conditional on float
-								((short*)dest)[destOffset+k]= *(short*)nodata;
-							else
-								((short*)dest)[destOffset+k]=(short)tempVal;
-						}
-					else if(datatype == LONG_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							int8_t tempVal = tempDataRow[k];
-							if(tempVal == *(int8_t*)filenodata)  // Risky conditional on float
-								((long*)dest)[destOffset+k]= *(long*)nodata;
-							else
-								((long*)dest)[destOffset+k]=(long)tempVal;
-						}
-					else if(datatype == FLOAT_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							int8_t tempVal = tempDataRow[k];
-							if(tempVal == *(int8_t*)filenodata)  // Risky conditional on float
-								((float*)dest)[destOffset+k]= *(float*)nodata;
-							else
-								((float*)dest)[destOffset+k]=(float)tempVal;
-						}
-					delete tempDataRow;
-				}
-				else if ((sampleFormat == 2) && (dataSizeFileIn == 2)) 
-				{
-					int16_t* tempDataRow = new int16_t[tileWidth];
-					MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileCols, MPI_BYTE, &status);
-
-					if(datatype == SHORT_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							int16_t tempVal = tempDataRow[k];
-							if(tempVal == *(int16_t*)filenodata)  // Risky conditional on float
-								((short*)dest)[destOffset+k]= *(short*)nodata;
-							else
-								((short*)dest)[destOffset+k]=(short)tempVal;
-						}
-					else if(datatype == LONG_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							int16_t tempVal = tempDataRow[k];
-							if(tempVal == *(int16_t*)filenodata)  // Risky conditional on float
-								((long*)dest)[destOffset+k]= *(long*)nodata;
-							else
-								((long*)dest)[destOffset+k]=(long)tempVal;
-						}
-					else if(datatype == FLOAT_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							int16_t tempVal = tempDataRow[k];
-							if(tempVal == *(int16_t*)filenodata)  // Risky conditional on float
-								((float*)dest)[destOffset+k]= *(float*)nodata;
-							else
-								((float*)dest)[destOffset+k]=(float)tempVal;
-						}
-					delete tempDataRow;
-				}
-				else if ((sampleFormat == 2) && (dataSizeFileIn == 4)) 
-				{
-					int32_t* tempDataRow = new int32_t[tileWidth];
-					MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileCols, MPI_BYTE, &status);
-
-					if(datatype == SHORT_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							int32_t tempVal = tempDataRow[k];
-							if(tempVal == *(int32_t*)filenodata)  // Risky conditional on float
-								((short*)dest)[destOffset+k]= *(short*)nodata;
-							else
-								((short*)dest)[destOffset+k]=(short)tempVal;
-						}
-					else if(datatype == LONG_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							int32_t tempVal = tempDataRow[k];
-							if(tempVal == *(int32_t*)filenodata)  // Risky conditional on float
-								((long*)dest)[destOffset+k]= *(long*)nodata;
-							else
-								((long*)dest)[destOffset+k]=(long)tempVal;
-						}
-					else if(datatype == FLOAT_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							int32_t tempVal = tempDataRow[k];
-							if(tempVal == *(int32_t*)filenodata)  // Risky conditional on float
-								((float*)dest)[destOffset+k]= *(float*)nodata;
-							else
-								((float*)dest)[destOffset+k]=(float)tempVal;
-						}
-					delete tempDataRow;
-				}
-				else if(sampleFormat == 3 && dataSizeFileIn == 4)
-				{
-					float *tempDataRow=new float[tileCols];
-					MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileCols, MPI_BYTE, &status);
-
-					if(datatype == SHORT_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							float tempVal = tempDataRow[k];
-							if(tempVal == *(float*)filenodata)  // Risky conditional on float
-								((short*)dest)[destOffset+k]= *(short*)nodata;
-							else
-								((short*)dest)[destOffset+k]=(short)tempVal;
-						}
-					else if(datatype == LONG_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							float tempVal = tempDataRow[k];
-							if(tempVal == *(float*)filenodata)  // Risky conditional on float
-								((long*)dest)[destOffset+k]= *(long*)nodata;
-							else
-								((long*)dest)[destOffset+k]=(long)tempVal;
-						}
-					else if(datatype == FLOAT_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							float tempVal = tempDataRow[k];
-							if(tempVal == *(float*)filenodata)  // Risky conditional on float
-								((float*)dest)[destOffset+k]= *(float*)nodata;
-							else
-								((float*)dest)[destOffset+k]=(float)tempVal;
-						}
-					delete tempDataRow;
-				} else if(sampleFormat == 3 && dataSizeFileIn == 8)
-				{
-					double *tempDataRow=new double[tileCols];
-					MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileCols, MPI_BYTE, &status);
-
-					if(datatype == SHORT_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							double tempVal = tempDataRow[k];
-							if(tempVal == *(double*)filenodata)  // Risky conditional on float
-								((short*)dest)[destOffset+k]= *(short*)nodata;
-							else
-								((short*)dest)[destOffset+k]=(short)tempVal;
-						}
-					else if(datatype == LONG_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							double tempVal = tempDataRow[k];
-							if(tempVal == *(double*)filenodata)  // Risky conditional on float
-								((long*)dest)[destOffset+k]= *(long*)nodata;
-							else
-								((long*)dest)[destOffset+k]=(long)tempVal;
-						}
-					else if(datatype == FLOAT_TYPE)
-						for(long k = 0; k < tileCols; k++)
-						{
-							double tempVal = tempDataRow[k];
-							if(tempVal == *(double*)filenodata)  // Risky conditional on float
-								((float*)dest)[destOffset+k]= *(float*)nodata;
-							else
-								((float*)dest)[destOffset+k]=(float)tempVal;
-						}
-					delete tempDataRow;
-				}
-			}
-		}
-	}
 }
 
 //Create/re-write tiff output file
-//BT void tiffIO::write(unsigned long long xstart, unsigned long long ystart, unsigned long long numRows, unsigned long long numCols, void* source) {
-void tiffIO::write(long xstart, long ystart, long numRows, long numCols, void* source) {
+void tiffIO::write(long xstart, long ystart, long numRows, long numCols, void* source,char prefix[],int prow,int pcol) {
+//write output files.
+	xsize = 0;
+	ysize = 0;
+	tifFile *outFile;
+	bool byPartition = false;
+	if(prow>0 && pcol>0)
+		byPartition = true;
+	long tempXleft = 0, tempYtop = 0;
+	if(byPartition == true){
 
-	MPI_Status status;
-	MPI_Offset mpiOffset;
-
-	//Calculate parameters needed by multiple tags
-	//Calculate strip data offsets and sizes
-	numOffsets = (totalY + tileLength - 1)/tileLength;
-	//BT unsigned long long *dataOffsets;
-	//BT unsigned long long *sizeOffsets;
-	//BT dataOffsets = (unsigned long long*) malloc( 8 * numOffsets );
-	//BT sizeOffsets = (unsigned long long*) malloc( 8 * numOffsets );
-	//BT numOffsets = (totalY + tileLength - 1)/tileLength;
-	uint32_t *dataOffsets;  //DGT
-	uint32_t *sizeOffsets;  //DGT
-	//SizeOf dataOffsets = (long*) malloc( 4 * numOffsets );
-	//SizeOf sizeOffsets = (long*) malloc( 4 * numOffsets );
-	dataOffsets = (uint32_t*) malloc( sizeof(uint32_t) * numOffsets );  //DGT
-	sizeOffsets = (uint32_t*) malloc( sizeof(uint32_t) * numOffsets );  //DGT
-
-	//BT unsigned long long sizeofStrip = tileLength * tileWidth * dataSize;
-	//BT unsigned long long dataOffset = 8; //offset to beginning of image data block. Put it right after file header
-	//BT for( unsigned long long i = 0; i< numOffsets; i++ ) {
-	//  The below is hard coded for strips that inherit the tileLength of the copied object
-	uint32_t sizeofStrip = tileLength * totalX * dataSizeObj;  // DGT made uint32_t, was long
-	uint32_t dataOffset = 8; //offset to beginning of image data block. Put it right after file header  //DGT made uint32_t, was long
-	for( long i = 0; i< numOffsets; i++ ) {
-		sizeOffsets[i] = tileLength * totalX * dataSizeObj;
-		dataOffsets[i] = dataOffset + (i * sizeofStrip);
-	}
-	// Recalculate size of final, potentially partial strip
-	//DGT  Deleted dataOffset from line below
-	//sizeOffsets[numOffsets-1] = dataOffset + ((totalY - (tileLength * (numOffsets-1))) * totalX * dataSize);
-	sizeOffsets[numOffsets-1] = ((totalY - (tileLength * (numOffsets-1))) * totalX * dataSizeObj);
-	//numEntries is the number of tags in the Oth (first and only) IFD
-	//Consider implementing additional tags in the future: 34735 - 34797 and 42112
-
-	numEntries = 14;
-	//  DGT implementing spatial reference tag
-	if(filedata.geoKeySize > 0)
-	{
-		numEntries++;
-	}
-	if(filedata.geoDoubleSize > 0)
-	{
-		numEntries++;
-	}
-	if(filedata.geoAsciiSize > 0)
-	{
-		numEntries++;
-	}
-	//  GDAL tag seems needed for ArcGIS to read GDAL spatial reference
-	if(filedata.gdalAsciiSize > 0)
-	{
-		numEntries++;
-	}
-
-	//Write all of the file except the data/image block
-	//This includes the file header, and all of the metadata, including the IFD header, footer, and data value blocks.
-	//Only process 0 gets to write outsite the data/image block
-	if(rank==0) {
-		//nextAvailable is the offset of nextAvailable unallocated area in the output file
-		//initially set it to the offset of the beginning of the 0th (first) IFD
-		//BT unsigned long long nextAvailable = dataOffset + (totalX * totalY * dataSize);
-		uint32_t nextAvailable = dataOffset + (totalX * totalY * dataSizeObj);  //DGT made uint32_t, was long
-		//printf("DataOffset: %lu, totalX: %lu, totalY: %lu, dataSize: %d\n",dataOffset, totalX, totalY, dataSizeObj);
-		//printf("Next available: %lu\n",nextAvailable);
-		//fflush(stdout);
-	
-		//Write file header information
-		//Write the byte-order value
-		short endian = LITTLEENDIAN;
-		MPI_File_write( fh, &endian, 2, MPI_BYTE, &status);
-	
-		//Write the tiff file identifier 
-		short version = TIFF;
-		MPI_File_write( fh, &version,2, MPI_BYTE, &status);
-
-		//Write the offset of 0th (first and only) Image File Directory (IFD)
-		//BT unsigned long long tableOffset = nextAvailable;
-		uint32_t tableOffset = nextAvailable;  //DGT made uint32_t, was long
-		nextAvailable += (numEntries * 12)+6; //update to offset of first Tag data value block by adding 12 bytes for each tag and 6 bytes for the IFD header and footer
-		MPI_File_write( fh, &tableOffset, 4, MPI_BYTE, &status);
-
-		//Go to beginning of 0th (first and only) IFD
-		//Write Number of Directory Entries for 0th IFD
-		MPI_File_seek( fh, tableOffset, MPI_SEEK_SET );
-		MPI_File_write( fh, &numEntries, 2, MPI_BYTE, &status);
 		
-		ifd obj;
+	//filex and filey are size of partiton.
+	fileX = gTotalX;
+	fileY = gTotalY / size;
+        if(rank == size -1)
+        	fileY += (gTotalY - size*((long)(gTotalY / size)));
+	//make filex and file y size of file wanted
+	int numXFiles = pcol;
+	int numYFiles = prow;
+	fileX = fileX/numXFiles;
+	fileY = fileY/numYFiles;
 
-		//Write entries for Oth (first and only) IFD
-		//Entry 0 - Image Width (columns)
-		obj.tag = 256;
-		obj.type = 4;  //DGT 10/19/11 changed from obj.type = 3;  Per email with Alan Richardson alan_r@mit.edu and reading http://partners.adobe.com/public/developer/en/tiff/TIFF6.pdf pages 13-15
-		obj.count = 1;
-		obj.offset = totalX;
-		writeIfd( obj);
-	
-		//Entry 1 - Image Length (rows)
-		obj.tag = 257;
-		obj.type = 4;  //DGT 10/19/11 changed from obj.type = 3; Same as above
-		obj.count = 1;
-		obj.offset = totalY;
-		writeIfd( obj);
-	
-		//Entry 2 - Bits (data size) per Sample
-		//printf("dataSizeObj: %d.\n", dataSizeObj);
-		obj.tag = 258;
-		obj.type = 3;
-		obj.count = 1;
-		obj.offset = dataSizeObj * 8;
-		writeIfd( obj);
-	
-		//Entry 3 - Compression (1=No Compression)
-		obj.tag = 259;
-		obj.type = 3;
-		obj.count = 1;
-		obj.offset = 1;
-		writeIfd( obj);
-	
-		//Entry 4 - Photometric Interpretation (1=Black Is Zero)
-		obj.tag = 262;
-		obj.type = 3;
-		obj.count = 1;
-		obj.offset = 1;
-		writeIfd( obj);
-	
-		//Entry 5 - Strip Offsets (pointers to beginning of strips)
-		//DGT  This does not properly handle the case for only one strip
-		obj.tag = 273;
-		obj.type = 4;
-		obj.count = numOffsets;
-		//BT unsigned long long WRITEOFFSETS;  //  DGT insert to handle case for only one strip
-		unsigned long WRITEOFFSETS;  //  DGT insert to handle case for only one strip
-		if (numOffsets == 1)  
-		{
-			obj.offset=dataOffsets[0];
+	PYS = rank * (gTotalY / size) + 0;
+	PYE = PYS + gTotalY / size;
+	if(rank == size -1)
+		PYE += (gTotalY - size*((long)(gTotalY / size)));
+	long numY = PYE-PYS;
+	for(int i = 0; i < gTotalX / fileX ; i++){
+		for(int j = 0; j < numY / fileY ; j++){
+			//calculate the number of x and y values to write to the file.
+			if(fileX*(i+1) - gTotalX < 0)// while xfile
+				xsize = fileX;
+			else if(fileX*(i+1) == gTotalX)//exact size, no more x files
+				xsize = fileX ;
+			else if(fileX*(i+1) - gTotalX  > 0)//remainder file size
+				xsize = fileX - (fileX*(i+1) - gTotalX); 
+			if(i == numXFiles-1)
+				xsize = fileX + gTotalX%fileX;//%numXFiles;
+
+			if(fileY*(j+1) - numY < 0)// while yfile
+				ysize = fileY;
+			else if(fileY*(j+1) == numY)//exact size, no more y files
+				ysize = fileY;
+			else if(fileY*(j+1) - numY > 0)//remainder file size
+				ysize = fileY - (fileY*(j+1) - numY); 
+			if(j == numYFiles-1)
+				ysize = fileY + numY%fileY;//;numYFiles;
+
+			FYS = PYS+fileY*j;
+			FYE = FYS + ysize;
+
+			//if file has information to be written write it.
+			char outName[NAME_MAX];
+			strncpy(outName,dirn,NAME_MAX);
+			char buff[40];//biggest at zz
+			strncat(outName,"/",2);//add trailing slash.
+			strcat(outName,prefix);
+			sprintf(buff,"p%d",rank);//TODO - out put in format (char)(char)(num).tif
+			strcat(outName,buff);
+			sprintf(buff,"r%d",j);//TODO - out put in format (char)(char)(num).tif
+			strcat(outName,buff);
+			sprintf(buff,"c%d",i);
+			strcat(outName,buff);
+			strcat(outName, ".tif");
+
+			outFile = new tifFile(outName, datatype, nodata, *IOfiles[0]);
+			outFile->setTotalXYtopYleftX(xsize, ysize, xleft + i * fileX * dx, ytop - PYS * dy - j * fileY * dy);
+			if(PYS >= FYS && PYE < FYE)
+			{//part is contained in the y coords being writtin to file.
+				outFile->write(0, PYS - FYS, PYE - PYS, xsize, source,i * fileX, gTotalX, byPartition);//ysize - (PYS - FYS) - (FYE - PYE)
+			}else if(PYS >= FYS && PYS < FYE && PYE >= FYE)
+			{//top part of part in file
+				outFile->write(0,PYS - FYS, FYE - PYS, xsize, source, i * fileX, gTotalX, byPartition); //ysize - (PYS - FYS)
+			}else if(PYS < FYS && FYS < PYE && PYE < FYE)
+			{//bottum of part in file
+				outFile->write(0, 0, PYE - FYS, xsize, source, (FYS - PYS) * gTotalX + i * fileX, gTotalX, byPartition);//ysize - (FYS - PYS)
+			}else if(PYS < FYS && FYE <= PYE)
+			{//the files y coords are contained in this part.
+				outFile->write(0, 0, FYE - FYS, xsize, source, (FYS - PYS) * gTotalX + i * fileX, gTotalX, byPartition);//ysize
+			}else{//this part has no data for this file
+				;//do nothing
+			}
+			delete outFile;
+
 		}
-		else
-		{
-			obj.offset = nextAvailable;
-			WRITEOFFSETS = nextAvailable;
-			nextAvailable += numOffsets*4;
-		}
-		writeIfd( obj);
+	}
+	}else{
+	for(int i = 0; i < gTotalX / fileX + 1; i++){
+		for(int j = 0; j < gTotalY / fileY + 1; j++){
+			//calculate the number of x and y values to write to the file.
+			if(fileX*(i+1) - gTotalX < 0)// while xfile
+				xsize = fileX;
+			else if(fileX*(i+1) == gTotalX)//exact size, no more x files
+				xsize = fileX ;
+			else if(fileX*(i+1) - gTotalX  > 0)//remainder file size
+				xsize = fileX - (fileX*(i+1) - gTotalX); 
+
+			if(fileY*(j+1) - gTotalY < 0)// while yfile
+				ysize = fileY;
+			else if(fileY*(j+1) == gTotalY)//exact size, no more y files
+				ysize = fileY;
+			else if(fileY*(j+1) - gTotalY > 0)//remainder file size
+				ysize = fileY - (fileY*(j+1) - gTotalY); 
 			
-		//Entry 6 - Samples per Pixel (always 1)
-		obj.tag = 277;
-		obj.type =3;
-		obj.count = 1;
-		obj.offset = 1;
-		writeIfd( obj);
-	
-		//Entry 7 - Rows per Strip
-		obj.tag = 278;
-		obj.type =3;
-		obj.count = 1;
-		obj.offset = tileLength;
-		writeIfd( obj);
-	
-		//Entry 8 - Strip Byte Counts
-		//DGT  This does not properly handle the case for only one strip
-		obj.tag = 279;
-		obj.type = 4;
-		obj.count = numOffsets;
-		//BT unsigned long long WRITESIZES;   //  DGT changes to handle case for only one strip
-		unsigned long WRITESIZES;   //  DGT changes to handle case for only one strip
-		if(numOffsets == 1)
-		{
-			obj.offset=sizeOffsets[0];
-		}
-		else
-		{
-			obj.offset = nextAvailable;
-			WRITESIZES = nextAvailable;
-			nextAvailable += numOffsets*4;
-		}
-		writeIfd( obj);		
-	
-		//Entry 9 - Planar Configuration (always 1)
-		obj.tag = 284;
-		obj.type =3;
-		obj.count = 1;
-		obj.offset = 1;
-		writeIfd( obj);
-	
-		//Entry 10 - Sample format ( 1=unsigned integer, 2=signed integer, 3=IEEE floating point )
-		//Note that size/length of pixel is defined by the BitsPerSample field
-		obj.tag = 339;
-		obj.type =3;
-		obj.count = 1;
-		if( datatype == FLOAT_TYPE )
-			obj.offset = 3;
-		else obj.offset = 2;  // This assumes that all integer grids being written are signed
-		writeIfd( obj);
-		
-		//Entry 11 - Scale Tag
-		obj.tag = 33550;
-		obj.type = 12;
-		obj.count = 3;
-		obj.offset = nextAvailable;
-		writeIfd( obj);
-		//BT unsigned long long WRITESCALETAG = nextAvailable;
-		unsigned long WRITESCALETAG = nextAvailable;
-		nextAvailable += 24;
-	
-		//Entry 12 - Model Tie Point Tag
-		obj.tag = 33922;
-		obj.type = 12;
-		obj.count = 6;
-		obj.offset = nextAvailable;
-		writeIfd( obj);
-		//BT unsigned long long WRITEMODEL = nextAvailable;
-		unsigned long WRITEMODEL = nextAvailable;
-		nextAvailable += 48;
+			PYS = rank * (gTotalY / size) + 0;
+			PYE = PYS + gTotalY / size;
+			if(rank == size -1)
+				PYE += (gTotalY - size*((long)(gTotalY / size)));
+			FYS = fileY*j;
+			FYE = FYS + ysize;
+			if(ysize ==0 || xsize == 0)
+				continue;// exact break condition.  TODO- use Dr. Tarbotons arithmatic in for loops instead.
 
-		//GeoTIFF-GeoKeyDirectoryTag (GeoKey index w/data when small)
-		unsigned long WRITEGEOKEY;
-		if(filedata.geoKeySize > 0)
-		{
-			obj.tag=34735;
-			obj.type=3;
-			obj.offset=nextAvailable;
-			obj.count=filedata.geoKeySize;  
-			WRITEGEOKEY = nextAvailable;
-			nextAvailable += obj.count * 2;  // 2 bytes per count since each is a short
-			writeIfd(obj);
-		}
+			//if file has information to be written write it.
+			char outName[NAME_MAX];
+			strncpy(outName,dirn,NAME_MAX);
+			char buff[40];//biggest at zz
+			strncat(outName,"/",2);//add trailing slash.
+			strcat(outName,prefix);
+			sprintf(buff,"r%d",j);//TODO - out put in format (char)(char)(num).tif
+			strcat(outName,buff);
+			sprintf(buff,"c%d",i);
+			strcat(outName,buff);
+			strcat(outName, ".tif");
 
-		//GeoTiff-GeoDoubleParamsTag (GeoKey double data values)
-		unsigned long WRITEGEODOUBLE;
-		if(filedata.geoDoubleSize > 0)
-		{
-			obj.tag=34736;
-			obj.type=12;
-			obj.offset=nextAvailable;
-			obj.count=filedata.geoDoubleSize;  
-			WRITEGEODOUBLE = nextAvailable;
-			nextAvailable += obj.count * 8; //8 bytes per count since each is a double
-			writeIfd(obj);
-		}
-
-		//GeoTiff-GeoAsciiParamsTag (GeoKey ASCII data values)
-		unsigned long WRITEGEOASCII;
-		if(filedata.geoAsciiSize > 0)
-		{
-			obj.tag=34737;
-			obj.type=2;
-			obj.offset=nextAvailable;
-			obj.count=filedata.geoAsciiSize;  
-			WRITEGEOASCII = nextAvailable;
-			nextAvailable += obj.count;
-			writeIfd(obj);
-		}
-
-		//GDAL_ASCII Tag
-		unsigned long WRITEGDALASCII;
-		if(filedata.gdalAsciiSize > 0)
-		{
-			obj.tag=42112;
-			obj.type=2;
-			obj.offset=nextAvailable;
-			obj.count=filedata.gdalAsciiSize;  
-			WRITEGDALASCII = nextAvailable;
-			nextAvailable += obj.count;
-			writeIfd(obj);
-		}
-
-		//Entry 13 - GDAL_NODATA Tag
-		obj.tag = 42113;
-		obj.type = 2;
-		//  DGT additions to handle datatypes
-		if( datatype == SHORT_TYPE ) obj.count = 7;
-		else if( datatype == LONG_TYPE ) obj.count = 12;
-		else obj.count = 25;
-		obj.offset = nextAvailable;
-		writeIfd( obj);
-		//BT unsigned long long WRITENODATA = nextAvailable;
-		unsigned long WRITENODATA = nextAvailable;
-		nextAvailable += obj.count;  // DGT modified from 25
-
-		//Write Footer for this IFD
-		//Footer consists of the offset for the next IFD, but since this is the only and last IFD, write 4 or 8 bytes of 0's
-		if ( version = TIFF ) {
-			//BT MPI_File_write( fh, (unsigned long long)0, 4, MPI_BYTE, &status);
-			MPI_File_write( fh, (uint32_t)0, 4, MPI_BYTE, &status);  //DGT
-		}
-		else {
-			MPI_File_write( fh, (uint64_t)0, 8, MPI_BYTE, &status);   //DGT
-		}
-
-		//Write Tag Data Blocks for Tags with more data than will fit in the tag (4 or 8 bytes depending on TIFF/BIGTIFF)
-		//Write Data for Strip Offsets 		
-		//DGT  Only do this for numOffsets > 1
-		if(numOffsets > 1)
-		{
-			mpiOffset = WRITEOFFSETS;
-			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET); 
-			MPI_File_write( fh, dataOffsets, 4*numOffsets, MPI_BYTE, &status);
-		
-			//Write Data for Strip Byte Counts
-			mpiOffset = WRITESIZES;
-			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-			MPI_File_write( fh, sizeOffsets, 4*numOffsets, MPI_BYTE, &status);
-		}
-	
-		//Write Data for Scale Tag
-		mpiOffset = WRITESCALETAG;
-		MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-		MPI_File_write( fh, &dx, 8, MPI_BYTE, &status);
-		MPI_File_write( fh, &dy, 8, MPI_BYTE, &status);
-		double dummy = 0;
-		MPI_File_write( fh, &dummy, 8, MPI_BYTE, &status);
-	
-		//Write Data for Model Tie Point Tag
-		mpiOffset = WRITEMODEL;
-		MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-		MPI_File_write( fh, &dummy, 8, MPI_BYTE, &status);
-		MPI_File_write( fh, &dummy, 8, MPI_BYTE, &status);
-		MPI_File_write( fh, &dummy, 8, MPI_BYTE, &status);
-		MPI_File_write( fh, &xleftedge, 8, MPI_BYTE, &status);
-		MPI_File_write( fh, &ytopedge, 8, MPI_BYTE, &status);
-		MPI_File_write( fh, &dummy, 8, MPI_BYTE, &status);
-
-		// Write Data for the GeoTIFF GeoKeyDirectoryTag tag
-		if(filedata.geoKeySize > 0)
-		{
-			mpiOffset = WRITEGEOKEY;
-			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-		//	MPI_File_write( fh, &filedata.geoKeyDir, 2*filedata.geoKeySize, MPI_BYTE, &status);
-			for( long i=0; i<filedata.geoKeySize; ++i) {
-				MPI_File_write( fh, &filedata.geoKeyDir[i], 2, MPI_BYTE, &status);
-				//printf("%d,",filedata.geoKeyDir[i]);
+			outFile = new tifFile(outName, datatype, nodata, *IOfiles[0]);
+			outFile->setTotalXYtopYleftX(xsize, ysize, xleft + i * fileX * dx, ytop - j * fileY * dy);
+			if(PYS >= FYS && PYE < FYE)
+			{//part is contained in the y coords being writtin to file.
+				outFile->write(0, PYS - FYS, PYE - PYS, xsize, source,i * fileX, gTotalX, byPartition);//ysize - (PYS - FYS) - (FYE - PYE)
+			}else if(PYS >= FYS && PYS < FYE && PYE >= FYE)
+			{//top part of part in file
+				outFile->write(0,PYS - FYS, FYE - PYS, xsize, source, i * fileX, gTotalX, byPartition); //ysize - (PYS - FYS)
+			}else if(PYS < FYS && FYS < PYE && PYE < FYE)
+			{//bottum of part in file
+				outFile->write(0, 0, PYE - FYS, xsize, source, (FYS - PYS) * gTotalX + i * fileX, gTotalX, byPartition);//ysize - (FYS - PYS)
+			}else if(PYS < FYS && FYE <= PYE)
+			{//the files y coords are contained in this part.
+				outFile->write(0, 0, FYE - FYS, xsize, source, (FYS - PYS) * gTotalX + i * fileX, gTotalX, byPartition);//ysize
+			}else{//this part has no data for this file
+				outFile->write(0, 0, 0, 0, source, 0, 0,byPartition);//so process 0 will write out the header.
 			}
-			//printf("\n");
-		}
+			delete outFile;
 
-		//  Write Data for the GeoTIFF GeoDoubleParamsTag tag
-		if(filedata.geoDoubleSize > 0)
-		{
-			mpiOffset = WRITEGEODOUBLE;
-			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-			MPI_File_write (fh, filedata.geoDoubleParams,(int)filedata.geoDoubleSize*8, MPI_BYTE, &status);
-		}
-
-		//  Write Data for the GeoTIFF GeoAsciiParamsTag tag
-		if(filedata.geoAsciiSize > 0)
-		{
-			mpiOffset = WRITEGEOASCII;
-			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-			MPI_File_write (fh, filedata.geoAscii,(int)filedata.geoAsciiSize, MPI_BYTE, &status);
-		}
-
-		//  Write GDALASCII tag
-		if(filedata.gdalAsciiSize > 0)
-		{
-			mpiOffset = WRITEGDALASCII;
-			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-			MPI_File_write (fh, filedata.gdalAscii,(int)filedata.gdalAsciiSize, MPI_BYTE, &status);
-		}
-
-		//Write Data for GDAL_NODATA Tag
-		mpiOffset = WRITENODATA;
-		MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-		if( datatype == SHORT_TYPE ) {
-			char cnodata[7];
-			sprintf(cnodata,"%06d\x0",*(short*)nodata); 
-			MPI_File_write( fh, &cnodata, 7, MPI_BYTE, &status);
-		}
-		else if( datatype == LONG_TYPE) {
-			char cnodata[12];
-			sprintf(cnodata,"%011d\x0",*(long*)nodata); 
-			MPI_File_write( fh, &cnodata, 12, MPI_BYTE, &status);
-		}
-		else if( datatype == FLOAT_TYPE) {
-			char cnodata[25];
-			//CPLString().Printf( "%.18g", dfNoData ).c_str() ); GDAL Code
-			//sprintf(cnodata,"%-24.16Le\x0",*(float*)nodata); Kim's Code
-			sprintf(cnodata,"%-24.16e\x0",*(float*)nodata);
-			MPI_File_write( fh, &cnodata, 25, MPI_BYTE, &status);
-		}
-
-	}
-	
-
-	//Write data/image block
-	//BT unsigned long long next =0;
-	long next =0;
-
-	if( datatype == SHORT_TYPE ) {
-		mpiOffset = dataOffset + (dataSizeObj*((totalX*ystart) + xstart));
-		MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-
-		//BT for(unsigned long i=0; i<numRows; i++) {
-		for(long i=0; i<numRows; i++) {
-			MPI_File_write( fh, (void*)(((short*)source)+next), numCols, MPI_SHORT, &status);
-			mpiOffset += (numCols*dataSizeObj);
-			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-			next+=numCols;
 		}
 	}
-	else if( datatype == LONG_TYPE ) {
-		mpiOffset = dataOffset + (dataSizeObj*((totalX*ystart) + xstart));
-		MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-//		printf("dataSizeObj %d\n",dataSizeObj);
-		
-/*  DGT This is ugly.  Internally we are using a long partition grid which in some implementations
-    is 4 bytes and other 8 bytes.  ArcGIS and GDAL apparrently do not read 8 byte tiff's.
-	We therefore coerce to int32_t which is fixed at 4 bytes.  There is not a corresponding MPI type 
-	to use for writing so we write using MPI_BYTE.  This assumes that the byte order is correct.
-*/
-		int32_t* tempDataRow = new int32_t[numCols];
-		for(long i=0; i<numRows; i++) {
-			for(long k = 0; k < numCols; k++)
-			{
-					tempDataRow[k]=(int32_t) (*((long*)source+next+k));
-					//  Here we are ignoring the possibility of typecast changing the no data value
-					//  if it was outside the range of int32_t
-			}
-			MPI_File_write( fh, (void*)tempDataRow, numCols*dataSizeObj, MPI_BYTE, &status);
-			mpiOffset += (numCols*dataSizeObj);
-			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-			next+=numCols;
-		}
-		delete tempDataRow;
-	}
-	else if( datatype == FLOAT_TYPE ) {
-		mpiOffset = dataOffset + (dataSizeObj*((totalX*ystart) + xstart));
-		//uint32_t check = dataOffset + (dataSizeObj*((totalX*ystart) + xstart));
-		//if (check != mpiOffset)
-		//{
-		//	printf("Tiffio offset overflow error: %ld, %ld\n",mpiOffset,check);
-		//	fflush(stdout);
-		//}
-		MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-		
-		//BT for(unsigned long i=0; i<numRows; i++) {
-		for(long i=0; i<numRows; i++) {
-			MPI_File_write( fh, (void*)(((float*)source)+next), numCols, MPI_FLOAT, &status);
-			mpiOffset += (numCols*dataSizeObj);
-			//check += (numCols*dataSizeObj);
-			//if (check != mpiOffset)
-			//{
-			//	printf("Offset overflow error 2nd posn: %ld, %ld\n",mpiOffset,check);
-			//	fflush(stdout);
-			//}
-			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-			next+=numCols;
-		}
-
-		//mpiOffset = dataOffset + (tiff->dataSizeObj*((totalCols*ystart) + xstart));
-		//MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-		//
-		//for(int i=0; i<dy_grid; i++) {
-		//	MPI_File_write( fh, &farr.d[next], dx_grid, MPI_FLOAT, &status);
-		//	mpiOffset += (dx_grid*tiff->dataSizeObj);
-		//	MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
-		//	next+=dx_grid;
-		//}
-
 	}
 }
 
 bool tiffIO::compareTiff(const tiffIO &comp){
 	double tol=0.0001;
-	if(totalX != comp.totalX)
+	if(gTotalX != comp.gTotalX)
 	{
-		printf("Columns do not match: %d %d\n",totalX,comp.totalX);  
+		printf("Columns do not match: %d %d\n",gTotalX,comp.gTotalX);  
 		return false;
 	}
-	if(totalY != comp.totalY)
+	if(gTotalY != comp.gTotalY)
 	{
-		printf("Rows do not match: %d %d\n",totalY,comp.totalY);  
+		printf("Rows do not match: %d %d\n",gTotalY,comp.gTotalY);  
 		return false;
 	}
 	if(abs(dx-comp.dx) > tol) 
@@ -1907,99 +605,12 @@ bool tiffIO::compareTiff(const tiffIO &comp){
 	//  are immaterial.  Rather we rely on leftedge and topedge comparisons to catch projection
 	//  differences as if the data is in a different projection and really different it would be
 	//  highly coincidental for the leftedge and topedge to coincide to within tol
-
-	//  Check spatial reference information
-	//bool warning = false;
-	//if(filedata.geoAsciiSize != comp.filedata.geoAsciiSize || 
-	//	filedata.geoKeySize != comp.filedata.geoKeySize) warning=true;
-	//else
-	//{
-	//	if(filedata.geoAsciiSize > 0)
-	//		if(strncmp(filedata.geoAscii,comp.filedata.geoAscii,filedata.geoAsciiSize)!=0)
-	//			warning=true;
-	//	if(filedata.geoKeySize > 0)
-	//	{
-	//		for(long i=0; i< filedata.geoKeySize; i++)
-	//			if(filedata.geoKeyDir[i]!=comp.filedata.geoKeyDir[i])
-	//				warning=true;
-	//	}
-	//}
-	//if(warning)
-	//{
-	//	if(rank == 0){
-	//		printf("Warning:  Spatial references different.  Results may not be correct.\n");
-	//		printf("File 1: %s\n",filename);
-	//		if(filedata.geoAsciiSize>0)
-	//			printf("  %s\n",filedata.geoAscii);
-	//		else
-	//			printf("  Unknown spatial reference\n");
-	//		if(filedata.geoKeySize>0)
-	//		{
-	//			printf("  Projection Params:\n  ");
-	//			for(long i=0; i< filedata.geoKeySize; i++)
-	//				printf("%d,",filedata.geoKeyDir[i]);
-	//			printf("\n");
-	//		}
-	//		else
-	//			printf("  Unknown projection parameters\n");
-
-	//		printf("File 2: %s\n",comp.filename);
-	//		if(comp.filedata.geoAsciiSize>0)
-	//			printf("  %s\n",comp.filedata.geoAscii);
-	//		else
-	//			printf("  Unknown spatial reference\n");
-	//		if(comp.filedata.geoKeySize>0)
-	//		{
-	//			printf("  Projection Params:\n  ");
-	//			for(long i=0; i< comp.filedata.geoKeySize; i++)
-	//				printf("%d,",comp.filedata.geoKeyDir[i]);
-	//			printf("\n");
-	//		}
-	//		else
-	//			printf("  Unknown projection parameters\n");
-	//	}
-	//}
 	return true;
 }
-
-void tiffIO::readIfd(ifd &obj ) {
-	MPI_Status status;
-	MPI_File_read( fh, &obj.tag, 2, MPI_BYTE,&status);
-	MPI_File_read( fh, &obj.type, 2, MPI_BYTE,&status);
-	MPI_File_read( fh, &obj.count, 4, MPI_BYTE,&status);
-	MPI_File_read( fh, &obj.offset, 4, MPI_BYTE,&status);
-}
-
-void tiffIO::writeIfd(ifd &obj) {
-	MPI_Status status;
-	MPI_File_write(fh, &obj.tag, 2, MPI_BYTE, &status);
-	MPI_File_write(fh, &obj.type, 2, MPI_BYTE, &status);
-	MPI_File_write(fh, &obj.count, 4, MPI_BYTE, &status);
-	MPI_File_write(fh, &obj.offset, 4, MPI_BYTE, &status);
-}
-
-void tiffIO::printIfd(ifd obj) {
-	printf("Tag: %hu\n",obj.tag);
-	printf("Type: %hu\n",obj.type);
-	printf("Value: %u\n",obj.count);
-	printf("offset: %u\n",obj.offset);
-}
-
-//BT void tiffIO::geoToGlobalXY(double geoX, double geoY, unsigned long long &globalX, unsigned long long &globalY){
-	//BT unsigned long x0 = (unsigned long)(xllcenter - dx/2);
-	//BT unsigned long y0 = (unsigned long)(yllcenter - dy/2);
-	//BT globalX = (unsigned long)((geoX - x0) / dx);
-	//BT globalY = (unsigned long)((y0 - geoY) / dy);
-	
 void tiffIO::geoToGlobalXY(double geoX, double geoY, int &globalX, int &globalY){
-	//Original version had dx's intead of dy's - in case of future problems
-//	int x0 = (int)(xllcenter - dx/2);
-//	int y0 = (int)(yllcenter + dy/2);  // yllcenter actually is the y coordinate of the center of the upper left grid cell 
 	globalX = (int)((geoX - xleftedge) / dx);
 	globalY = (int)((ytopedge - geoY) / dy);
 }
-
-//BT void tiffIO::globalXYToGeo(unsigned long long globalX, unsigned long long globalY, double &geoX, double &geoY){
 void tiffIO::globalXYToGeo(long globalX, long globalY, double &geoX, double &geoY){
 	geoX = xleftedge + dx/2. + globalX*dx;
 	geoY = ytopedge - dy/2. - globalY*dy;  
