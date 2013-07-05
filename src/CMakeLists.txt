@@ -23,7 +23,7 @@ set (shape_srcs
      shape/ReadOutlets.cpp)
 
 #OBJFILES includes classes, structures, and constants common to all files
-set (common_srcs commonLib.cpp tiffIO.cpp)
+set (common_srcs commonLib.cpp tiffIO.cpp aux_nodata.cpp)
 
 set (D8FILES aread8mn.cpp aread8.cpp ${common_srcs} ${shape_srcs})
 set (DINFFILES areadinfmn.cpp areadinf.cpp ${common_srcs} ${shape_srcs})
