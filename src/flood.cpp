@@ -133,7 +133,16 @@ int flood( char* demfile, char* felfile, char *sfdrfile, int usesfdr, bool verbo
 
 	//Create empty partition to store new information
 	tdpartition *planchon;
-	float felNodata = -3.0e38;
+	float felNodata;
+	switch (dem.getDatatype()) {
+	FLOAT_TYPE:
+		felNodata = *(float*)dem.getNodata();
+	default:
+		felNodata = -3.0e38;
+	};
+	if (0 == rank)
+		printf("Using NoData=%g value for demfel\n", felNodata);
+
 	planchon = CreateNewPartition(FLOAT_TYPE, totalX, totalY, dx, dy, felNodata);
 
 	long i,j;

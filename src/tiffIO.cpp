@@ -42,6 +42,7 @@ email:  dtarb@usu.edu
 #include <stdio.h>
 #include <memory>
 #include "tiffIO.h"
+#include "aux_nodata.h"
 using namespace std;
 
 tiffIO::tiffIO(char *fname, DATA_TYPE newtype){
@@ -543,6 +544,15 @@ tiffIO::tiffIO(char *fname, DATA_TYPE newtype){
 	//Compute xllcenter and yllcenter
 	xllcenter=xleftedge+dx/2.;
 	yllcenter=ytopedge-(totalY*dy)-dy/2.;
+
+	if( 1 != noDataDef ) {
+		nodata = NULL;
+		char buf[MAXLN];
+		strncpy(buf, fname, MAXLN);
+		strcpy(buf + strlen(buf) - 4, ".aux");
+	  noDataDef = getNodataFromAUX(buf, &nodata);
+		filenodata = nodata;				// FIXME Does anybody free up those???
+	}
 
 	//TODO - DGT please add code to also read ESRI no data value
 	if( noDataDef != 1 ) {
