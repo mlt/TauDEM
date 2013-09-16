@@ -43,6 +43,7 @@ email:  dtarb@usu.edu
 #include "commonLib.h"
 #include <queue>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
