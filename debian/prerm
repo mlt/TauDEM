@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+for command in $(find /usr/lib/taudem-5.0.6 -type f); do
+    NAME=$(basename $command)
+    update-alternatives --remove taudem-$NAME $command
+done
+
+#DEBHELPER#
+
