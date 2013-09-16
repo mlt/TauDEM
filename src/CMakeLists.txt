@@ -116,5 +116,5 @@ install(TARGETS aread8
                 slopeavedown
                 streamnet
                 threshold
-        DESTINATION bin)
+        DESTINATION lib/taudem-5.0.6)
 
