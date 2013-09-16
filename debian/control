@@ -8,7 +8,7 @@ Homepage: http://hydrology.usu.edu/taudem/taudem5.0/
 
 Package: taudem-5.0.6
 Architecture: any
-Depends: mpich2, ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Provides: taudem
 Replaces: taudem (<= 5.2-2)
 Conflicts: taudem (<= 5.2-2)
