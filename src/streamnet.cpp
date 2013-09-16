@@ -162,7 +162,7 @@ struct Slink{
 };
 
 int netsetup(char *pfile,char *srcfile,char *ordfile,char *ad8file,char *elevfile,char *treefile, char *coordfile, 
-			 char *outletshapefile, char *wfile, char *streamnetshp, long useOutlets, long ordert, bool verbose) 
+			 char *outletshapefile, char *wfile, char *streamnetshp, long useOutlets, long ordert, bool verbose, int prow, int pcol) 
 {
 	// MPI Init section
 	MPI_Init(NULL,NULL);{
@@ -1206,8 +1206,9 @@ int netsetup(char *pfile,char *srcfile,char *ordfile,char *ad8file,char *elevfil
 
 		long wsGridNodata=MISSINGLONG;
 		short ordNodata=MISSINGSHORT;
+		char prefix[5] = "w";
 		tiffIO wsIO(wfile, LONG_TYPE,&wsGridNodata,ad8IO);
-		wsIO.write(xstart, ystart, ny, nx, wsGrid->getGridPointer());
+		wsIO.write(xstart, ystart, ny, nx, wsGrid->getGridPointer(),prefix,prow,pcol);
 
 		//  Use contribs as a short to write out order data that was held in lengths
 		tempShort=0;
@@ -1218,8 +1219,9 @@ int netsetup(char *pfile,char *srcfile,char *ordfile,char *ad8file,char *elevfil
 				if(!lengths->isNodata(i,j))
 					contribs->setData(i,j,(short)lengths->getData(i,j,tempFloat));
 			}
+		strncpy(prefix , "ord",5);
 		tiffIO ordIO(ordfile, SHORT_TYPE,&ordNodata,ad8IO);
-		ordIO.write(xstart, ystart, ny, nx, contribs->getGridPointer());
+		ordIO.write(xstart, ystart, ny, nx, contribs->getGridPointer(),prefix,prow,pcol);
 		
 		// Timer - write time
 		double writet = MPI_Wtime();

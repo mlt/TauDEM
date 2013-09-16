@@ -65,7 +65,7 @@ email:  dtarb@usu.edu
 int main(int argc,char **argv)
 {
    char pfile[MAXLN],srcfile[MAXLN],outletmovedfile[MAXLN],outletshpfile[MAXLN];
-   int err,i,maxdist=50;
+   int err,i,maxdist=50,prow=0,pcol=0;
    
    if(argc < 9)
     {  
@@ -86,6 +86,24 @@ int main(int argc,char **argv)
 			}
 			else goto errexit;
 		}
+                else if(strcmp(argv[i],"-mf")==0)
+                {
+                        i++;
+                        if(argc > i)
+                        {
+                                prow = atoi(argv[i]);
+                                i++;
+                                if(argc > i)
+                                {
+                                        pcol = atoi(argv[i]);
+                                        i++;
+                                }
+                                else goto errexit;
+                        }
+                        else goto errexit;
+                        if(prow <=0 || pcol <=0)
+                                goto errexit;
+                }
 		else if(strcmp(argv[i],"-src")==0)
 		{
 			i++;
@@ -131,7 +149,7 @@ int main(int argc,char **argv)
 			goto errexit;
 		}
 	}
-    if(err=outletstosrc(pfile,srcfile,outletshpfile,outletmovedfile,maxdist) != 0)
+    if(err=outletstosrc(pfile,srcfile,outletshpfile,outletmovedfile,maxdist,prow,pcol) != 0)
        printf("Move outlets to stream error %d\n",err);
 
 	return 0;

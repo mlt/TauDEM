@@ -46,7 +46,7 @@ SHAPEFILES = shape/cell.o shape/dbf.o shape/exception.o shape/field.o shape/item
 	     shape/ReadOutlets.o
 
 #OBJFILES includes classes, structures, and constants common to all files
-OBJFILES = commonLib.o tiffIO.o
+OBJFILES = commonLib.o tiffIO.o tifFile.o
 
 D8FILES = aread8mn.o aread8.o $(OBJFILES) $(SHAPEFILES)
 DINFFILES = areadinfmn.o areadinf.o $(OBJFILES) $(SHAPEFILES)

@@ -177,7 +177,7 @@ void calcSlope( tdpartition *flowDir, tdpartition *elevDEM, tdpartition *slope) 
 
 
 //Open files, Initialize grid memory, makes function calls to set flowDir, slope, and resolvflats, writes files
-int setdird8( char* demfile, char* pointfile, char *slopefile, char *flowfile, int useflowfile) {
+int setdird8( char* demfile, char* pointfile, char *slopefile, char *flowfile, int useflowfile, int prow, int pcol) {
 
 	MPI_Init(NULL,NULL);{
 
@@ -280,9 +280,9 @@ int setdird8( char* demfile, char* pointfile, char *slopefile, char *flowfile, i
 
 		//Stop timer
 		computeSlopet = MPI_Wtime();
-
+		char prefix[6]="sd8";
 		tiffIO slopeIO(slopefile, FLOAT_TYPE, &slopeNodata, dem);
-		slopeIO.write(xstart, ystart, ny, nx, slope->getGridPointer());
+		slopeIO.write(xstart, ystart, ny, nx, slope->getGridPointer(),prefix,prow,pcol);
 	}  // This bracket intended to destruct slope partition and release memory
 
 	double writeSlopet = MPI_Wtime();
@@ -315,9 +315,9 @@ int setdird8( char* demfile, char* pointfile, char *slopefile, char *flowfile, i
 
 	//Timing info
 	double computeFlatt = MPI_Wtime();
-
+	char prefix[6] = "p";
 	tiffIO pointIO(pointfile, SHORT_TYPE, &flowDirNodata, dem);
-	pointIO.write(xstart, ystart, ny, nx, flowDir->getGridPointer());
+	pointIO.write(xstart, ystart, ny, nx, flowDir->getGridPointer(),prefix,prow,pcol);
 	double writet = MPI_Wtime();
  	double headerRead, dataRead, computeSlope, writeSlope, computeFlat,writeFlat, write, total,temp;
         headerRead = headert-begint;

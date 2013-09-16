@@ -40,6 +40,15 @@ field::field( const char * p_fieldName,
 	type = p_type;
 }
 
+//DESTRUCTOR
+field::~field()
+{
+	if (fieldName)
+		delete fieldName;
+
+	fieldName = NULL;
+}
+
 //OPERATORS
 field field::operator=( const field & f )
 {

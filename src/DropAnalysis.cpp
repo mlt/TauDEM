@@ -160,7 +160,7 @@ short newOrder(short nOrder[8], bool &junction, bool &source){
 
 int dropan(char *areafile, char *dirfile, char *elevfile, char *ssafile, char *dropfile,
                            char *outletfile, float threshmin, float threshmax, int nthresh, int steptype,
-                           float *threshopt)
+                           float *threshopt, int prow, int pcol)
 {
 
 	// MPI Init section

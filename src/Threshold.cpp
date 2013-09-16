@@ -46,7 +46,7 @@ email:  dtarb@usu.edu
 #include "tiffIO.h"
 using namespace std;
 
-int threshold(char *ssafile,char *srcfile,char *maskfile, float thresh, int usemask)
+int threshold(char *ssafile,char *srcfile,char *maskfile, float thresh, int usemask, int prow, int pcol)
 {
 	MPI_Init(NULL,NULL);{
 
@@ -151,8 +151,9 @@ int threshold(char *ssafile,char *srcfile,char *maskfile, float thresh, int usem
 
 	//Create and write TIFF file
 	short aNodata = -32768;
+	char prefix[5] = "src";
 	tiffIO srcc(srcfile, SHORT_TYPE, &aNodata, ssa);
-	srcc.write(xstart, ystart, ny, nx, src->getGridPointer());
+	srcc.write(xstart, ystart, ny, nx, src->getGridPointer(),prefix,prow,pcol);
 
 	//Brackets force MPI-dependent objects to go out of scope before Finalize is called
 	}MPI_Finalize();

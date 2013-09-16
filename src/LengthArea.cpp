@@ -48,7 +48,7 @@ email:  dtarb@usu.edu
 #include "tiffIO.h"
 using namespace std;
 
-int lengtharea(char *plenfile, char*ad8file, char *ssfile, float *p)
+int lengtharea(char *plenfile, char*ad8file, char *ssfile, float *p, int prow, int pcol)
 {
 	MPI_Init(NULL,NULL);{
 
@@ -139,8 +139,9 @@ int lengtharea(char *plenfile, char*ad8file, char *ssfile, float *p)
 
 	//Create and write TIFF file
 	short aNodata = -32768;
+	char prefix[5] = "ss";
 	tiffIO sss(ssfile, SHORT_TYPE, &aNodata, ad8);
-	sss.write(xstart, ystart, ny, nx, ss->getGridPointer());
+	sss.write(xstart, ystart, ny, nx, ss->getGridPointer(),prefix,prow,pcol);
 
 	//Brackets force MPI-dependent objects to go out of scope before Finalize is called
 	}MPI_Finalize();

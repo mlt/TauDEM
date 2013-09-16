@@ -92,7 +92,7 @@ void initNeighborDinfup(tdpartition* neighbor,tdpartition* flowData,queue<node> 
 	//  and place locations with no neighbors that drain to them on the que
 	int i,j,k,in,jn;
 	short tempShort;
-	float angle,p;
+	float tempFloat,angle,p;
 	node temp;
 	if(useOutlets != 1) {
 		//Count the contributing neighbors and put on queue
@@ -219,6 +219,8 @@ void initNeighborDinfup(tdpartition* neighbor,tdpartition* flowData,queue<node> 
 			}
 			finished = neighbor->ringTerm( finished );
 		}
+		delete bufferAbove;
+		delete bufferBelow;
 	}
 }
 
@@ -355,6 +357,8 @@ void initNeighborD8up(tdpartition* neighbor,tdpartition* flowData,queue<node> *q
 			}
 			finished = neighbor->ringTerm( finished );
 		}
+		delete bufferAbove;
+		delete bufferBelow;
 	}
 }
 

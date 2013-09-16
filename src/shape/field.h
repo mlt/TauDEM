@@ -17,6 +17,9 @@ class field
 			   int p_fieldWidth,
 			   int p_number_of_decimals );
 
+		//DESTRUCTOR
+		virtual ~field();
+
 		//OPERATORS
 		field operator=( const field & f );
 

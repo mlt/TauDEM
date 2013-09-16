@@ -53,7 +53,7 @@ int main(int argc,char **argv)
    char pfile[MAXLN],srcfile[MAXLN],ordfile[MAXLN],ad8file[MAXLN],elevfile[MAXLN],wfile[MAXLN],streamnetshp[MAXLN];
    char treefile[MAXLN],coordfile[MAXLN],outletshapefile[MAXLN];
    long ordert=1, useoutlets=0;
-   int err,i;
+   int err,i,prow=0,pcol = 0;
     bool verbose=false;  //  Initialize verbose flag
    
    if(argc < 2)
@@ -101,6 +101,24 @@ int main(int argc,char **argv)
 			}
 			else goto errexit;
 		}
+                else if(strcmp(argv[i],"-mf")==0)
+                {
+                        i++;
+                        if(argc > i)
+                        {
+                                prow = atoi(argv[i]);
+                                i++;
+                                if(argc > i)
+                                {
+                                        pcol = atoi(argv[i]);
+                                        i++;
+                                }
+                                else goto errexit;
+                        }
+                        else goto errexit;
+                        if(prow <=0 || pcol <=0)
+                                goto errexit;
+                }
 		else if(strcmp(argv[i],"-ad8")==0)
 		{
 			i++;
@@ -208,7 +226,7 @@ int main(int argc,char **argv)
 		nameadd(streamnetshp,argv[1],"net.shp");
 	} 
 
-    if(err=netsetup(pfile,srcfile,ordfile,ad8file,elevfile,treefile,coordfile,outletshapefile,wfile,streamnetshp, useoutlets, ordert,verbose) != 0)
+    if(err=netsetup(pfile,srcfile,ordfile,ad8file,elevfile,treefile,coordfile,outletshapefile,wfile,streamnetshp, useoutlets, ordert,verbose,prow,pcol) != 0)
        printf("StreamNet error %d\n",err);
 
 	return 0;

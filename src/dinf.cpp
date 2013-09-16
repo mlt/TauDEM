@@ -104,7 +104,7 @@ int dontCross( int k, int i, int j, tdpartition *flowDir) {
 
 //Set positive flowdirections of elevDEM
 
-int setdir( char* demfile, char* angfile, char *slopefile, char *flowfile, int useflowfile) {
+int setdir( char* demfile, char* angfile, char *slopefile, char *flowfile, int useflowfile, int prow, int pcol) {
 
 	MPI_Init(NULL,NULL);{
 
@@ -203,8 +203,9 @@ int setdir( char* demfile, char* angfile, char *slopefile, char *flowfile, int u
 
 	//Stop timer
 	computeSlopet = MPI_Wtime();
+	char prefix[6] = "slp";
 	tiffIO slopeIO(slopefile, FLOAT_TYPE, &slopeNodata, dem);
-	slopeIO.write(xstart, ystart, ny, nx, slope->getGridPointer());
+	slopeIO.write(xstart, ystart, ny, nx, slope->getGridPointer(),prefix,prow,pcol);
 	}  // This bracket intended to destruct slope partition and release memory
 
 	double writeSlopet = MPI_Wtime();
@@ -239,8 +240,9 @@ int setdir( char* demfile, char* angfile, char *slopefile, char *flowfile, int u
 	double computeFlatt = MPI_Wtime();
 //	printf("Before angwrite rank: %d\n",rank);
 	float flowDirNodata=MISSINGFLOAT;
+	char prefix[5] = "ang";
 	tiffIO flowIO(angfile, FLOAT_TYPE, &flowDirNodata, dem);
-	flowIO.write(xstart, ystart, ny, nx, flowDir->getGridPointer());
+	flowIO.write(xstart, ystart, ny, nx, flowDir->getGridPointer(),prefix,prow,pcol);
 
 	double writet = MPI_Wtime();
 

@@ -60,7 +60,7 @@ using namespace std;
 // moved to commonlib.h
 
 int dsllArea(char* angfile,char* ctptfile,char* dmfile,char* shfile,char* qfile, char* dgfile, 
-		   int useOutlets, int contcheck, float cSol)
+		   int useOutlets, int contcheck, float cSol, int prow, int pcol)
 {
 
 	MPI_Init(NULL,NULL);{
@@ -300,8 +300,9 @@ int dsllArea(char* angfile,char* ctptfile,char* dmfile,char* shfile,char* qfile,
 
 	//Create and write TIFF file
 	float scaNodata = MISSINGFLOAT;
+	char prefix[6] = "ctpt";
 	tiffIO cctpt(ctptfile, FLOAT_TYPE, &scaNodata, ang);
-	cctpt.write(xstart, ystart, ny, nx, ctpt->getGridPointer());
+	cctpt.write(xstart, ystart, ny, nx, ctpt->getGridPointer(),prefix,prow,pcol);
 
 	double writet = MPI_Wtime();
         double dataRead, compute, write, total,tempd;

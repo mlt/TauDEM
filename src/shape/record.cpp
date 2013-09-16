@@ -21,6 +21,15 @@ record::record( const record & r )
 	recordDoubleValue = r.recordDoubleValue;
 }
 
+//DESTRUCTOR
+record::~record()
+{
+	if (recordStringValue)
+		delete recordStringValue;
+
+	recordStringValue = NULL;
+}
+
 //OPERATORS
 record record::operator=( const record & r )
 {	if( r.recordStringValue == NULL )

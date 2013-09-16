@@ -21,6 +21,15 @@ cell::cell( const cell & r )
 	cellDoubleValue = r.cellDoubleValue;
 }
 
+//DESTRUCTOR
+cell::~cell()
+{
+	if (cellStringValue)
+		delete cellStringValue;
+
+	cellStringValue = NULL;
+}
+
 //OPERATORS
 cell cell::operator=( const cell & r )
 {	if( r.cellStringValue == NULL )

@@ -54,7 +54,7 @@ email:  dtarb@usu.edu
 #include "shape/shapefile.h"
 using namespace std;
 
-int distgrid(char *pfile, char *srcfile, char *distfile, int thresh)
+int distgrid(char *pfile, char *srcfile, char *distfile, int thresh, int prow, int pcol)
 {
 MPI_Init(NULL,NULL);
 {  //  All code within braces so that objects go out of context and destruct before MPI is closed
@@ -218,8 +218,9 @@ MPI_Init(NULL,NULL);
 
 	//Create and write TIFF file
 	float aNodata = MISSINGFLOAT;
+	char prefix[6] = "dist";
 	tiffIO a(distfile, FLOAT_TYPE, &aNodata, pf);
-	a.write(xstart, ystart, ny, nx, fdarr->getGridPointer());
+	a.write(xstart, ystart, ny, nx, fdarr->getGridPointer(),prefix,prow,pcol);
 	double writet = MPI_Wtime();
         double dataRead, compute, write, total,tempd;
         dataRead = readt-begint;

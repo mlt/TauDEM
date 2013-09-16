@@ -60,7 +60,7 @@ using namespace std;
 
 float dist[9];
 int avalancherunoutgrd(char *angfile, char *felfile, char *assfile, char *rzfile, char *dmfile, float thresh, 
-					   float alpha, int path)
+					   float alpha, int path, int prow, int pcol)
 {
 
 	MPI_Init(NULL,NULL);{
@@ -326,11 +326,12 @@ int avalancherunoutgrd(char *angfile, char *felfile, char *assfile, char *rzfile
 
 	//Create and write TIFF file
 	float scaNodata = MISSINGFLOAT;
+	char prefix[5] = "rz";
 	tiffIO rrz(rzfile, FLOAT_TYPE, &scaNodata, ang);
-	rrz.write(xstart, ystart, ny, nx, rz->getGridPointer());
-
+	rrz.write(xstart, ystart, ny, nx, rz->getGridPointer(),prefix,prow,pcol);
+	strncpy(prefix, "dfs" , 5);
 	tiffIO ddm(dmfile, FLOAT_TYPE, &scaNodata, ang);
-	ddm.write(xstart, ystart, ny, nx, dm->getGridPointer());
+	ddm.write(xstart, ystart, ny, nx, dm->getGridPointer(),prefix,prow,pcol);
 
 	double writet = MPI_Wtime();
         double dataRead, compute, write, total,tempd;

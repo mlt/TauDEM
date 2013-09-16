@@ -51,7 +51,7 @@ email:  dtarb@usu.edu
 int main(int argc,char **argv)
 {
    char pfile[MAXLN],plenfile[MAXLN],tlenfile[MAXLN],gordfile[MAXLN],shfile[MAXLN],maskfile[MAXLN];
-   int err,useOutlets=0,useMask=0,thresh=0,i;
+   int err,useOutlets=0,useMask=0,thresh=0,i,prow=0,pcol=0;
 
    if(argc < 2)
     {  	
@@ -82,6 +82,24 @@ int main(int argc,char **argv)
 			}
 			else goto errexit;
 		}
+                else if(strcmp(argv[i],"-mf")==0)
+                {
+                        i++;
+                        if(argc > i)
+                        {
+                                prow = atoi(argv[i]);
+                                i++;
+                                if(argc > i)
+                                {
+                                        pcol = atoi(argv[i]);
+                                        i++;
+                                }
+                                else goto errexit;
+                        }
+                        else goto errexit;
+                        if(prow <=0 || pcol <=0)
+                                goto errexit;
+                }
 		else if(strcmp(argv[i],"-plen")==0)
 		{
 			i++;
@@ -153,7 +171,7 @@ int main(int argc,char **argv)
 
 	}   
 
-    if( (err=gridnet(pfile,plenfile,tlenfile,gordfile,maskfile,shfile,useMask, useOutlets, thresh )) != 0)
+    if( (err=gridnet(pfile,plenfile,tlenfile,gordfile,maskfile,shfile,useMask, useOutlets, thresh, prow, pcol)) != 0)
         printf("gridnet error %d\n",err);
 
 	return 0;

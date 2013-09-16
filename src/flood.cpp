@@ -48,7 +48,7 @@ email:  dtarb@usu.edu
 using namespace std;
 
 int flood( char* demfile, char* felfile, char *sfdrfile, int usesfdr, bool verbose, 
-           bool is_4Point,bool use_mask,char *maskfile)  // these three added by arb, 5/31/11
+          bool is_4Point,bool use_mask,char *maskfile, int prow, int pcol, float epsilon) // Three added by arb, 5/31/11
 {
 
 	MPI_Init(NULL,NULL);{
@@ -302,6 +302,7 @@ int flood( char* demfile, char* felfile, char *sfdrfile, int usesfdr, bool verbo
 						//Get neighbor data and store as planchon for self
 						planchon->getData(in,jn, neighborFloat);
 			}
+			if(neighborFloat < FLT_MAX)neighborFloat += epsilon;
 //				if( neighborFloat < FLT_MAX ) {  //DGT This check is redundant - because scans start from the side
 				//Set the grid to either elevDEM, all "water" can be taken off"
 			if(elevDEM->getData(i,j, tempFloat) >= neighborFloat ){
@@ -369,6 +370,7 @@ int flood( char* demfile, char* felfile, char *sfdrfile, int usesfdr, bool verbo
 						//Get neighbor data and store as planchon for self
 						planchon->getData(in,jn, neighborFloat);
 			}
+			if(neighborFloat < FLT_MAX)neighborFloat += epsilon;
 	//				if( neighborFloat < FLT_MAX ) {  //DGT This check is redundant - because scans start from the side
 				//Set the grid to either elevDEM, all "water" can be taken off"
 			if(elevDEM->getData(i,j, tempFloat) >= neighborFloat ){
@@ -425,6 +427,7 @@ int flood( char* demfile, char* felfile, char *sfdrfile, int usesfdr, bool verbo
 						//Get neighbor data and store as planchon for self
 						planchon->getData(in,jn, neighborFloat);
 			}
+			if(neighborFloat < FLT_MAX)neighborFloat += epsilon;
 	//				if( neighborFloat < FLT_MAX ) {  //DGT This check is redundant - because scans start from the side
 				//Set the grid to either elevDEM, all "water" can be taken off"
 			if(elevDEM->getData(i,j, tempFloat) >= neighborFloat ){
@@ -491,8 +494,9 @@ int flood( char* demfile, char* felfile, char *sfdrfile, int usesfdr, bool verbo
 	}
 
 	//Create and write TIFF file
+	char prefix[5] = "fel";
 	tiffIO fel(felfile, FLOAT_TYPE, &felNodata, dem);
-	fel.write(xstart, ystart, ny, nx, planchon->getGridPointer());
+	fel.write(xstart, ystart, ny, nx, planchon->getGridPointer(),prefix,prow,pcol);
 
 	if(verbose)printf("Partition: %d, written\n",rank);
 	double headerRead, dataRead, compute, write, total,temp;

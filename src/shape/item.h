@@ -16,6 +16,9 @@ class item
 		item();
 		item( const item & r );
 
+		//DESTRUCTOR
+		virtual ~item();
+
 		//OPERATORS
 		item operator=( const item & r );
 

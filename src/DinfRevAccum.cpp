@@ -49,7 +49,7 @@ email:  dtarb@usu.edu
 using namespace std;
 
 
-int dsaccum(char *angfile,char *wgfile, char *raccfile, char *dmaxfile)
+int dsaccum(char *angfile,char *wgfile, char *raccfile, char *dmaxfile, int prow, int pcol)
 {
 
 	MPI_Init(NULL,NULL);{
@@ -251,11 +251,13 @@ int dsaccum(char *angfile,char *wgfile, char *raccfile, char *dmaxfile)
 
 	//Create and write TIFF file
 	float raccNodata = MISSINGFLOAT;
+	char prefix[6] = "racc";
 	tiffIO rrac(raccfile, FLOAT_TYPE, &raccNodata, ang);
-	rrac.write(xstart, ystart, ny, nx, racc->getGridPointer());
+	rrac.write(xstart, ystart, ny, nx, racc->getGridPointer(),prefix,prow,pcol);
+	strncpy(prefix, "dmax", 6);
 
 	tiffIO ddmax(dmaxfile, FLOAT_TYPE, &raccNodata, ang);
-	ddmax.write(xstart, ystart, ny, nx, dmax->getGridPointer());
+	ddmax.write(xstart, ystart, ny, nx, dmax->getGridPointer(),prefix,prow,pcol);
 
 	double writet = MPI_Wtime();
 

@@ -49,13 +49,13 @@ email:  dtarb@usu.edu
 
 int dropan(char *areafile, char *dirfile, char *elevfile, char *ssafile, char *dropfile, 
 			   char *outletfile, float threshmin, float threshmax, int nthresh, int steptype, 
-			   float *threshopt);
+			   float *threshopt,int prow,int pcol);
 
 int main(int argc,char **argv)  
 {
    char areafile[MAXLN],dirfile[MAXLN], elevfile[MAXLN], ssafile[MAXLN], dropfile[MAXLN], outletfile[MAXLN];
    float threshmin, threshmax, threshopt;
-   int err, nthresh, steptype;
+   int err, nthresh, steptype, prow=0, pcol=0;
       
    if(argc < 2) goto errexit;
    // Set defaults
@@ -94,6 +94,24 @@ int main(int argc,char **argv)
 				}
 				else goto errexit;
 			}
+                else if(strcmp(argv[i],"-mf")==0)
+                {
+                        i++;
+                        if(argc > i)
+                        {
+                                prow = atoi(argv[i]);
+                                i++;
+                                if(argc > i)
+                                {
+                                        pcol = atoi(argv[i]);
+                                        i++;
+                                }
+                                else goto errexit;
+                        }
+                        else goto errexit;
+                        if(prow <=0 || pcol <=0)
+                                goto errexit;
+                }
 			else if(strcmp(argv[i],"-fel")==0)
 			{
 				i++;
@@ -155,7 +173,7 @@ int main(int argc,char **argv)
    }
     if((err=dropan(areafile, dirfile, elevfile, ssafile, dropfile, 
 			   outletfile, threshmin, threshmax, nthresh, steptype, 
-			   &threshopt)) != 0)
+			   &threshopt,prow,pcol)) != 0)
         printf("Drop Analysis Error %d\n",err);
 //	else printf("%f  Value for optimum that drop analysis selected - see output file for details.\n",threshopt);
 

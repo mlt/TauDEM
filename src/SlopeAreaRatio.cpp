@@ -46,7 +46,7 @@ email:  dtarb@usu.edu
 #include "tiffIO.h"
 using namespace std;
 
-int atanbgrid(char *slopefile,char *areafile,char *atanbfile)
+int atanbgrid(char *slopefile,char *areafile,char *atanbfile, int prow, int pcol)
 {
 	MPI_Init(NULL,NULL);{
 
@@ -138,8 +138,9 @@ int atanbgrid(char *slopefile,char *areafile,char *atanbfile)
 
 	//Create and write TIFF file
 	float aNodata = -1.0f;
+	char prefix[5] = "sar";
 	tiffIO sarr(atanbfile, FLOAT_TYPE, &aNodata, slp);
-	sarr.write(xstart, ystart, ny, nx, sar->getGridPointer());
+	sarr.write(xstart, ystart, ny, nx, sar->getGridPointer(),prefix,prow,pcol);
 
 	//Brackets force MPI-dependent objects to go out of scope before Finalize is called
 	}MPI_Finalize();

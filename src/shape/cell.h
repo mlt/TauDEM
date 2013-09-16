@@ -16,6 +16,9 @@ class cell
 		cell();
 		cell( const cell & r );
 
+		//DESTRUCTOR
+		virtual ~cell();
+
 		//OPERATORS
 		cell operator=( const cell & r );
 
