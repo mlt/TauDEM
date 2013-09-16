@@ -1,0 +1,21 @@
+From: Mikhail Titov <mlt@gmx.us>
+Date: Mon, 16 Sep 2013 01:04:04 -0500
+Subject: Include stdint.h into linearpart.h
+
+===================================================================
+---
+ src/linearpart.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/linearpart.h b/src/linearpart.h
+index 82155db..46ae72a 100644
+--- a/src/linearpart.h
++++ b/src/linearpart.h
+@@ -43,6 +43,7 @@ email:  dtarb@usu.edu
+ #include "commonLib.h"
+ #include <queue>
+ #include <stdio.h>
++#include <stdint.h>
+ #include <stdlib.h>
+ #include <string.h>
+ #include <math.h>
