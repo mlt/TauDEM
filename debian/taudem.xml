@@ -59,19 +59,16 @@
 TauDEM is a suite of Digital Elevation Model (DEM) tools for the extraction and analysis of hydrologic information from topography as represented by a DEM.
 </para>
 <!-- <formalpara><title>aread8</title> -->
-<refsect2><title>aread8</title>
+<refsect2><title>aread8 - D8 Contributing Area</title>
 <para>
 <itemizedlist>
-<listitem><replaceable>basefilename</replaceable> is the name of the raw digital elevation model</listitem>
-<listitem><replaceable>pfile</replaceable> is the D8 flow direction input file.</listitem>
-<listitem><replaceable>afile</replaceable> is the D8 area output file.</listitem>
-<listitem><replaceable>shfile</replaceable> is the optional outlet shape input file.</listitem>
-<listitem><replaceable>wfile</replaceable> is the optional weight grid input file.</listitem>
-<listitem><option>-nc</option> overrides edge contamination checking</listitem>
+<listitem><simpara><replaceable>basefilename</replaceable> is the name of the raw digital elevation model</simpara></listitem>
+<listitem><simpara><replaceable>pfile</replaceable> is the D8 flow direction input file.</simpara></listitem>
+<listitem><simpara><replaceable>afile</replaceable> is the D8 area output file.</simpara></listitem>
+<listitem><simpara><replaceable>shfile</replaceable> is the optional outlet shape input file.</simpara></listitem>
+<listitem><simpara><replaceable>wfile</replaceable> is the optional weight grid input file.</simpara></listitem>
+<listitem><simpara><option>-nc</option> overrides edge contamination checking</simpara></listitem>
 </itemizedlist>
-The following are appended to the file names
-before the files are opened:
-ad8   D8 contributing area file (output)
 </para>
 </refsect2>
 <!-- </formalpara> -->
