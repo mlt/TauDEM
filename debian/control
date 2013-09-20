@@ -2,7 +2,7 @@ Source: taudem-5.0.6
 Section: science
 Priority: extra
 Maintainer: Mikhail Titov <mlt@gmx.us>
-Build-Depends: debhelper (>= 9), libmpich2-dev, cmake
+Build-Depends: debhelper (>= 9), libmpich2-dev, cmake, docbook2x
 Standards-Version: 3.9.4
 Homepage: http://hydrology.usu.edu/taudem/taudem5.0/
 

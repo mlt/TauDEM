@@ -1,0 +1,79 @@
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.1.2//EN"
+          "http://www.oasis-open.org/docbook/xml/4.1.2/docbookx.dtd">
+<refentry id="taudem">
+
+<refmeta>
+<refentrytitle>taudem</refentrytitle>
+<manvolnum>1</manvolnum>
+</refmeta>
+
+<refnamediv>
+<refname>aread8</refname>
+<refname>areadinf</refname>
+<refname>d8flowdir</refname>
+<refname>d8flowpathextremeup</refname>
+<refname>d8hdisttostrm</refname>
+<refname>dinfavalanche</refname>
+<refname>dinfconclimaccum</refname>
+<refname>dinfdecayaccum</refname>
+<refname>dinfdistdown</refname>
+<refname>dinfdistup</refname>
+<refname>dinfflowdir</refname>
+<refname>dinfrevaccum</refname>
+<refname>dinftranslimaccum</refname>
+<refname>dinfupdependence</refname>
+<refname>dropanalysis</refname>
+<refname>gridnet</refname>
+<refname>lengtharea</refname>
+<refname>moveoutletstostrm</refname>
+<refname>peukerdouglas</refname>
+<refname>pitremove</refname>
+<refname>slopearea</refname>
+<refname>slopearearatio</refname>
+<refname>slopeavedown</refname>
+<refname>streamnet</refname>
+<refname>threshold</refname>
+<refpurpose>TauDEM (Terrain Analysis Using Digital Elevation Models)</refpurpose>
+</refnamediv>
+
+<refsynopsisdiv>
+<cmdsynopsis>
+<command>aread8</command>
+<arg><option>-nc</option></arg>
+<arg choice="req"><replaceable>basefilename</replaceable></arg>
+</cmdsynopsis>
+<cmdsynopsis>
+<command>aread8</command>
+<arg><option>-nc</option></arg>
+<arg choice="plain"><option>-p</option></arg>
+<arg choice="req"><replaceable>pfile</replaceable></arg>
+<arg choice="plain">-ad8</arg>
+<arg choice="req"><replaceable>afile</replaceable></arg>
+<arg>-o <arg choice="req"><replaceable>shfile</replaceable></arg></arg>
+<arg>-wg <arg choice="req"><replaceable>wfile</replaceable></arg></arg>
+</cmdsynopsis>
+</refsynopsisdiv>
+
+<refsect1><title>Description</title>
+<para>
+TauDEM is a suite of Digital Elevation Model (DEM) tools for the extraction and analysis of hydrologic information from topography as represented by a DEM.
+</para>
+<!-- <formalpara><title>aread8</title> -->
+<refsect2><title>aread8</title>
+<para>
+<itemizedlist>
+<listitem><replaceable>basefilename</replaceable> is the name of the raw digital elevation model</listitem>
+<listitem><replaceable>pfile</replaceable> is the D8 flow direction input file.</listitem>
+<listitem><replaceable>afile</replaceable> is the D8 area output file.</listitem>
+<listitem><replaceable>shfile</replaceable> is the optional outlet shape input file.</listitem>
+<listitem><replaceable>wfile</replaceable> is the optional weight grid input file.</listitem>
+<listitem><option>-nc</option> overrides edge contamination checking</listitem>
+</itemizedlist>
+The following are appended to the file names
+before the files are opened:
+ad8   D8 contributing area file (output)
+</para>
+</refsect2>
+<!-- </formalpara> -->
+</refsect1>
+</refentry>

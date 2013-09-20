@@ -24,5 +24,6 @@ override_dh_auto_configure:
 
 override_dh_auto_build:
 	-rm src/stdint.h
+	docbook2x-man --solinks debian/taudem.xml
 	dh_auto_build
 
