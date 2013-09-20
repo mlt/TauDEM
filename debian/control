@@ -5,6 +5,8 @@ Maintainer: Mikhail Titov <mlt@gmx.us>
 Build-Depends: debhelper (>= 9), libmpich2-dev, cmake
 Standards-Version: 3.9.4
 Homepage: http://hydrology.usu.edu/taudem/taudem5.0/
+Vcs-Git: https://github.com/mlt/TauDEM.git
+Vcs-Browser: https://github.com/mlt/TauDEM
 
 Package: taudem-5.0.6
 Architecture: any
