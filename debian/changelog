@@ -1,3 +1,13 @@
+taudem-5.0.6 (5.0.6-3.1) sid; urgency=low
+
+  * NMU
+  * Remove unnecessary dependency on mpich2 package
+  * Debian patches form patch-queue branch
+  * Add Vcs entries to debian/control
+  * Add watch file
+
+ -- Mikhail Titov <mlt@gmx.us>  Mon, 23 Sep 2013 01:01:02 -0500
+
 taudem-5.0.6 (5.0.6-2) raring; urgency=low
 
   * Cleanup for lintian
