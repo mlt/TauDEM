@@ -8,7 +8,7 @@ Subject: Change installation directory to /usr/lib/taudem-$version
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index 41f484f..1665b64 100644
+index 41f484f..7daf213 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
 @@ -116,5 +116,5 @@ install(TARGETS aread8
@@ -16,5 +16,5 @@ index 41f484f..1665b64 100644
                  streamnet
                  threshold
 -        DESTINATION bin)
-+        DESTINATION lib/taudem-5.0.6)
++        DESTINATION lib/taudem-5.1.1)
  

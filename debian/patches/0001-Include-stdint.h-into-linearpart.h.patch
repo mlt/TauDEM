@@ -8,7 +8,7 @@ Subject: Include stdint.h into linearpart.h
  1 file changed, 1 insertion(+)
 
 diff --git a/src/linearpart.h b/src/linearpart.h
-index 82155db..46ae72a 100644
+index 605f325..36877dd 100644
 --- a/src/linearpart.h
 +++ b/src/linearpart.h
 @@ -43,6 +43,7 @@ email:  dtarb@usu.edu
