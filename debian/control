@@ -13,7 +13,7 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Provides: taudem
 Replaces: taudem (<= 5.2-2)
-Conflicts: taudem (<= 5.2-2)
+Breaks: taudem (<= 5.2-2)
 Suggests: qgis
 Description: Terrain Analysis Using Digital Elevation Models
  TauDEM (Terrain Analysis Using Digital Elevation Models) is a suite of
