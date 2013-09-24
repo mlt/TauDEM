@@ -429,7 +429,6 @@ void linearpart<datatype>::transferPack( int *countA, int *bufferAbove, int *cou
 	MPI_Status status;
 	if(size==1) return;
 
-	datatype *ptr;
 	int place;
 	datatype *abuf, *bbuf;
 	int absize;
@@ -444,7 +443,7 @@ void linearpart<datatype>::transferPack( int *countA, int *bufferAbove, int *cou
 	if( rank >0 ) {
 		MPI_Buffer_attach(abuf,absize);
 		MPI_Bsend( bufferAbove, *countA, MPI_INT, rank-1, 3, MCW );
-		MPI_Buffer_detach(&ptr,&place);
+		MPI_Buffer_detach(&abuf,&place);
 	}
 	if( rank < size-1) {
 		MPI_Probe( rank+1,3,MCW, &status);  // Blocking function this only returns when there is a message to receive
@@ -452,13 +451,16 @@ void linearpart<datatype>::transferPack( int *countA, int *bufferAbove, int *cou
 		MPI_Recv( bufferAbove, *countA,MPI_INT, rank+1,3,MCW,&status);  // Receives message sent in first if from another process
 		MPI_Buffer_attach(bbuf,bbsize);
 		MPI_Bsend( bufferBelow, *countB, MPI_INT, rank+1,3,MCW);
-		MPI_Buffer_detach(&ptr,&place);
+		MPI_Buffer_detach(&bbuf,&place);
 	}
 	if( rank > 0 ) {
 		MPI_Probe( rank-1,3,MCW, &status);
 		MPI_Get_count( &status, MPI_INT, countB);
 		MPI_Recv( bufferBelow, *countB,MPI_INT, rank-1,3,MCW,&status);
 	}
+
+	delete abuf;
+	delete bbuf;
 }
 
 //Returns true if grid element (x,y) is equal to noData.

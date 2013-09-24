@@ -21,6 +21,14 @@ item::item( const item & r )
 	itemDoubleValue = r.itemDoubleValue;
 }
 
+item::~item()
+{
+	if (itemStringValue)
+		delete itemStringValue;
+
+	itemStringValue = NULL;
+}
+
 //OPERATORS
 item item::operator=( const item & r )
 {	if( r.itemStringValue == NULL )

@@ -40,7 +40,6 @@ email:  dtarb@usu.edu
 
 #include <mpi.h>
 #include <stdio.h>
-//#include <stdint.h>  // See http://en.wikipedia.org/wiki/Stdint.h for details.
 #include <memory>
 #include "tiffIO.h"
 using namespace std;
@@ -339,7 +338,9 @@ tiffIO::tiffIO(char *fname, DATA_TYPE newtype){
 			//BT for( unsigned long i=0; i<filedata.geoDoubleSize; ++i) {
 			for( long i=0; i<filedata.geoDoubleSize; ++i) {
 				MPI_File_read( fh, &filedata.geoDoubleParams[i], 8, MPI_BYTE, &status);
+				//printf("%g,",filedata.geoDoubleParams[i]);
 			}
+			//printf("\n");
 			break;
 		case 34737: //GeoTIFF-GeoAsciiParamsTag
 			//TODO Fix Type Cast of ifds[index].count
@@ -423,6 +424,9 @@ tiffIO::tiffIO(char *fname, DATA_TYPE newtype){
 			} else if ((sampleFormat == 3) && (dataSizeFileIn == 4)) {
 				filenodata=new float;
 				*((float*)filenodata) = (float) atof(noD);
+			} else if ((sampleFormat == 3) && (dataSizeFileIn == 8)) {
+				filenodata=new double;
+				*((double*)filenodata) = atof(noD);
 			} else {
 				printf("Error opening file %s.\n", fname);
 				printf("Unsupported TIFF file type or filetype not known when reading nodata tag.  sampleFormat = %d, dataSizeFileIn = %d.\n", sampleFormat, dataSizeFileIn);
@@ -457,6 +461,10 @@ tiffIO::tiffIO(char *fname, DATA_TYPE newtype){
 					*((short*)nodata)=(short)(*((float*)filenodata));
 					noDataDiff = *((short*)nodata) - (*((float*)filenodata));
 					if(noDataDiff > 1e-6) (*((short*)nodata))=MISSINGSHORT;
+				} else if ((sampleFormat == 3) && (dataSizeFileIn == 8)) {
+					*((short*)nodata)=(short)(*((double*)filenodata));
+					noDataDiff = *((short*)nodata) - (*((double*)filenodata));
+					if(noDataDiff > 1e-6) (*((short*)nodata))=MISSINGSHORT;
 				} 
 			}
 			else if( datatype == LONG_TYPE) {
@@ -481,6 +489,10 @@ tiffIO::tiffIO(char *fname, DATA_TYPE newtype){
 					*((long*)nodata)=(long)(*((float*)filenodata));
 					noDataDiff = *((long*)nodata) - (*((float*)filenodata));
 					if(noDataDiff > 1e-6) (*((long*)nodata))=MISSINGLONG;
+				} else if ((sampleFormat == 3) && (dataSizeFileIn == 8)) {
+					*((long*)nodata)=(long)(*((double*)filenodata));
+					noDataDiff = *((long*)nodata) - (*((double*)filenodata));
+					if(noDataDiff > 1e-6) (*((long*)nodata))=MISSINGLONG;
 				} 
 			}
 			else if( datatype == FLOAT_TYPE) {
@@ -503,6 +515,10 @@ tiffIO::tiffIO(char *fname, DATA_TYPE newtype){
 					*((float*)nodata)=(float)(*((int64_t*)filenodata));
 				} else if ((sampleFormat == 3) && (dataSizeFileIn == 4)) {
 					*((float*)nodata)=(float)(*((float*)filenodata));
+				} else if ((sampleFormat == 3) && (dataSizeFileIn == 8)) {
+					*((float*)nodata)=(float)(*((double*)filenodata));
+					noDataDiff=abs(*((double*)nodata)-*((double*)filenodata));
+					if(noDataDiff > 1e-6) (*((float*)nodata))=MISSINGFLOAT;
 				} 
 			}
 			}
@@ -572,6 +588,10 @@ tiffIO::tiffIO(char *fname, DATA_TYPE newtype){
 				filenodata=new float;
 				*((float*)filenodata) = (float) MISSINGSHORT;
 				*((short*)nodata)=(short)(*((float*)filenodata));
+			} else if ((sampleFormat == 3) && (dataSizeFileIn == 8)) {
+				filenodata=new double;
+				*((double*)filenodata) = (double) MISSINGSHORT;
+				*((short*)nodata)=(short)(*((double*)filenodata));
 			}
 			if(rank==0)printf("The value: %d will be used as representing missing data.\n",*((short*)nodata));
 		}else if(datatype == LONG_TYPE)
@@ -613,6 +633,10 @@ tiffIO::tiffIO(char *fname, DATA_TYPE newtype){
 				filenodata=new float;
 				*((float*)filenodata) = (float) MISSINGLONG;
 				*((long*)nodata)=(long)(*((float*)filenodata));
+			} else if ((sampleFormat == 3) && (dataSizeFileIn == 8)) {
+				filenodata=new double;
+				*((double*)filenodata) = (double) MISSINGLONG;
+				*((long*)nodata)=(long)(*((double*)filenodata));
 			}
 			if(rank==0)printf("The value: %d will be used as representing missing data.\n",*((long*)nodata));
 		}
@@ -655,6 +679,10 @@ tiffIO::tiffIO(char *fname, DATA_TYPE newtype){
 				filenodata=new float;
 				*((float*)filenodata) = MISSINGFLOAT;
 				*((float*)nodata)=(float)(*((float*)filenodata));
+			} else if ((sampleFormat == 3) && (dataSizeFileIn == 8)) {
+				filenodata=new double;
+				*((double*)filenodata) = MISSINGFLOAT;
+				*((float*)nodata)=(float)(*((double*)filenodata));
 			}
 			if(rank==0)printf("The value: %g will be used as representing missing data.\n",*((float*)nodata));
 		}
@@ -780,12 +808,13 @@ void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* de
 	//Find the initial current strip indexes
 	long currentStripFirstRowIndex = firstStripFirstRowIndex;  //index of first row needed within current strip; start with first strip needed
 	long currentStripLastRowIndex;  // index of last row needed within current strip; start with first strip needed
-	if (lastStripIndex > 0) {
+	if ((lastStripIndex - firstStripIndex) > 0) { //7/24/13 DGT added condition of firstStripIndex to account for partitions entirely within a strip
 		currentStripLastRowIndex = tileLength-1;
 	} else{
 		currentStripLastRowIndex = lastStripLastRowIndex;
 	}
-
+    //printf("Rank %d, firstSI %d, LastSI %d, firstrow %d, lastrow %d, ystart %d, numrows %d, tilelen %d, currstlastrow %d\n",rank,firstStripIndex,lastStripIndex,firstStripFirstRowIndex, 
+		//lastStripLastRowIndex,ystart,numRows,tileLength,currentStripLastRowIndex);
 	//loop through needed TIFF Strips
 	for( long i = firstStripIndex; i <= lastStripIndex; ++i ) {
 		mpiOffset = offsets[i];
@@ -798,6 +827,9 @@ void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* de
 			//  because even if we read into a void variable we still need the logic that
 			//  determines how to interpret the read data to be able to typecast it onto
 			//  the output file type  
+			long rowbeginning=(j+(i*tileLength)-ystart)*tileWidth;
+			//printf("Rank %d, strip %d, striprow %d, rowbeginning %d\n",rank,i,j,rowbeginning);
+			//fflush(stdout);
 			if((sampleFormat == 1) && (dataSizeFileIn == 1)) {
 				uint8_t *tempDataRow= new uint8_t[tileWidth];
 				MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileWidth, MPI_BYTE, &status);
@@ -806,28 +838,29 @@ void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* de
 					{
 						uint8_t tempVal = tempDataRow[k];
 						if(tempVal == *(uint8_t*)filenodata) 
-							((short*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(short*)nodata;
+							((short*)dest)[rowbeginning+k]= *(short*)nodata;
 						else
-							((short*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(short)tempVal;
+							((short*)dest)[rowbeginning+k]=(short)tempVal;
 					}
 				else if(datatype == LONG_TYPE)
 					for(long k = 0; k < tileWidth; k++)
 					{
 						uint8_t tempVal = tempDataRow[k];
 						if(tempVal == *(uint8_t*)filenodata)  
-							((long*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(long*)nodata;
+							((long*)dest)[rowbeginning+k]= *(long*)nodata;
 						else
-							((long*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(long)tempVal;
+							((long*)dest)[rowbeginning+k]=(long)tempVal;
 					}
 				else if(datatype == FLOAT_TYPE)
 					for(long k = 0; k < tileWidth; k++)
 					{
 						uint8_t tempVal = tempDataRow[k];
 						if(tempVal == *(uint8_t*)filenodata)  
-							((float*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(float*)nodata;
+							((float*)dest)[rowbeginning+k]= *(float*)nodata;
 						else
-							((float*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(float)tempVal;
+							((float*)dest)[rowbeginning+k]=(float)tempVal;
 					}
+				delete tempDataRow;
 			} else if ((sampleFormat == 1) && (dataSizeFileIn == 2)) {
 				uint16_t *tempDataRow= new uint16_t[tileWidth];
 				MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileWidth, MPI_BYTE, &status);
@@ -836,28 +869,29 @@ void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* de
 					{
 						uint16_t tempVal = tempDataRow[k];
 						if(tempVal == *(uint16_t*)filenodata) 
-							((short*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(short*)nodata;
+							((short*)dest)[rowbeginning+k]= *(short*)nodata;
 						else
-							((short*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(short)tempVal;
+							((short*)dest)[rowbeginning+k]=(short)tempVal;
 					}
 				else if(datatype == LONG_TYPE)
 					for(long k = 0; k < tileWidth; k++)
 					{
 						uint16_t tempVal = tempDataRow[k];
 						if(tempVal == *(uint16_t*)filenodata)  
-							((long*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(long*)nodata;
+							((long*)dest)[rowbeginning+k]= *(long*)nodata;
 						else
-							((long*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(long)tempVal;
+							((long*)dest)[rowbeginning+k]=(long)tempVal;
 					}
 				else if(datatype == FLOAT_TYPE)
 					for(long k = 0; k < tileWidth; k++)
 					{
 						uint16_t tempVal = tempDataRow[k];
 						if(tempVal == *(uint16_t*)filenodata)  
-							((float*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(float*)nodata;
+							((float*)dest)[rowbeginning+k]= *(float*)nodata;
 						else
-							((float*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(float)tempVal;
+							((float*)dest)[rowbeginning+k]=(float)tempVal;
 					}
+				delete tempDataRow;
 			} else if ((sampleFormat == 1) && (dataSizeFileIn == 4)) {
 				uint32_t *tempDataRow= new uint32_t[tileWidth];
 				MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileWidth, MPI_BYTE, &status);
@@ -866,28 +900,29 @@ void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* de
 					{
 						uint32_t tempVal = tempDataRow[k];
 						if(tempVal == *(uint32_t*)filenodata) 
-							((short*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(short*)nodata;
+							((short*)dest)[rowbeginning+k]= *(short*)nodata;
 						else
-							((short*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(short)tempVal;
+							((short*)dest)[rowbeginning+k]=(short)tempVal;
 					}
 				else if(datatype == LONG_TYPE)
 					for(long k = 0; k < tileWidth; k++)
 					{
 						uint32_t tempVal = tempDataRow[k];
 						if(tempVal == *(uint32_t*)filenodata)  
-							((long*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(long*)nodata;
+							((long*)dest)[rowbeginning+k]= *(long*)nodata;
 						else
-							((long*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(long)tempVal;
+							((long*)dest)[rowbeginning+k]=(long)tempVal;
 					}
 				else if(datatype == FLOAT_TYPE)
 					for(long k = 0; k < tileWidth; k++)
 					{
 						uint32_t tempVal = tempDataRow[k];
 						if(tempVal == *(uint32_t*)filenodata)  
-							((float*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(float*)nodata;
+							((float*)dest)[rowbeginning+k]= *(float*)nodata;
 						else
-							((float*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(float)tempVal;
+							((float*)dest)[rowbeginning+k]=(float)tempVal;
 					}
+				delete tempDataRow;
 			} else if ((sampleFormat == 2) && (dataSizeFileIn == 1)) {
 				int8_t* tempDataRow = new int8_t[tileWidth];
 				MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileWidth, MPI_BYTE, &status);
@@ -896,28 +931,29 @@ void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* de
 					{
 						int8_t tempVal = tempDataRow[k];
 						if(tempVal == *(int8_t*)filenodata) 
-							((short*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(short*)nodata;
+							((short*)dest)[rowbeginning+k]= *(short*)nodata;
 						else
-							((short*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(short)tempVal;
+							((short*)dest)[rowbeginning+k]=(short)tempVal;
 					}
 				else if(datatype == LONG_TYPE)
 					for(long k = 0; k < tileWidth; k++)
 					{
 						int8_t tempVal = tempDataRow[k];
 						if(tempVal == *(int8_t*)filenodata)  
-							((long*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(long*)nodata;
+							((long*)dest)[rowbeginning+k]= *(long*)nodata;
 						else
-							((long*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(long)tempVal;
+							((long*)dest)[rowbeginning+k]=(long)tempVal;
 					}
 				else if(datatype == FLOAT_TYPE)
 					for(long k = 0; k < tileWidth; k++)
 					{
 						int8_t tempVal = tempDataRow[k];
 						if(tempVal == *(int8_t*)filenodata)  
-							((float*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(float*)nodata;
+							((float*)dest)[rowbeginning+k]= *(float*)nodata;
 						else
-							((float*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(float)tempVal;
+							((float*)dest)[rowbeginning+k]=(float)tempVal;
 					}
+				delete tempDataRow;
 			} else if ((sampleFormat == 2) && (dataSizeFileIn == 2)) {
 				int16_t* tempDataRow = new int16_t[tileWidth];
 				MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileWidth, MPI_BYTE, &status);
@@ -926,28 +962,29 @@ void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* de
 					{
 						int16_t tempVal = tempDataRow[k];
 						if(tempVal == *(int16_t*)filenodata) 
-							((short*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(short*)nodata;
+							((short*)dest)[rowbeginning+k]= *(short*)nodata;
 						else
-							((short*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(short)tempVal;
+							((short*)dest)[rowbeginning+k]=(short)tempVal;
 					}
 				else if(datatype == LONG_TYPE)
 					for(long k = 0; k < tileWidth; k++)
 					{
 						int16_t tempVal = tempDataRow[k];
 						if(tempVal == *(int16_t*)filenodata)  
-							((long*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(long*)nodata;
+							((long*)dest)[rowbeginning+k]= *(long*)nodata;
 						else
-							((long*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(long)tempVal;
+							((long*)dest)[rowbeginning+k]=(long)tempVal;
 					}
 				else if(datatype == FLOAT_TYPE)
 					for(long k = 0; k < tileWidth; k++)
 					{
 						int16_t tempVal = tempDataRow[k];
 						if(tempVal == *(int16_t*)filenodata)  
-							((float*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(float*)nodata;
+							((float*)dest)[rowbeginning+k]= *(float*)nodata;
 						else
-							((float*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(float)tempVal;
+							((float*)dest)[rowbeginning+k]=(float)tempVal;
 					}
+				delete tempDataRow;
 			} else if ((sampleFormat == 2) && (dataSizeFileIn == 4)) {
 				int32_t* tempDataRow = new int32_t[tileWidth];
 				MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileWidth, MPI_BYTE, &status);
@@ -956,28 +993,29 @@ void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* de
 					{
 						int32_t tempVal = tempDataRow[k];
 						if(tempVal == *(int32_t*)filenodata) 
-							((short*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(short*)nodata;
+							((short*)dest)[rowbeginning+k]= *(short*)nodata;
 						else
-							((short*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(short)tempVal;
+							((short*)dest)[rowbeginning+k]=(short)tempVal;
 					}
 				else if(datatype == LONG_TYPE)
 					for(long k = 0; k < tileWidth; k++)
 					{
 						int32_t tempVal = tempDataRow[k];
 						if(tempVal == *(int32_t*)filenodata)  
-							((long*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(long*)nodata;
+							((long*)dest)[rowbeginning+k]= *(long*)nodata;
 						else
-							((long*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(long)tempVal;
+							((long*)dest)[rowbeginning+k]=(long)tempVal;
 					}
 				else if(datatype == FLOAT_TYPE)
 					for(long k = 0; k < tileWidth; k++)
 					{
 						int32_t tempVal = tempDataRow[k];
 						if(tempVal == *(int32_t*)filenodata)  
-							((float*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(float*)nodata;
+							((float*)dest)[rowbeginning+k]= *(float*)nodata;
 						else
-							((float*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(float)tempVal;
+							((float*)dest)[rowbeginning+k]=(float)tempVal;
 					}
+				delete tempDataRow;
 			} else if ((sampleFormat == 3) && (dataSizeFileIn == 4)) {
 				float *tempDataRow= new float[tileWidth];
 				MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileWidth, MPI_BYTE, &status);
@@ -986,28 +1024,60 @@ void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* de
 					{
 						float tempVal = tempDataRow[k];
 						if(tempVal == *(float*)filenodata)  // Risky conditional on float
-							((short*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(short*)nodata;
+							((short*)dest)[rowbeginning+k]= *(short*)nodata;
 						else
-							((short*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(short)tempVal;
+							((short*)dest)[rowbeginning+k]=(short)tempVal;
 					}
 				else if(datatype == LONG_TYPE)
 					for(long k = 0; k < tileWidth; k++)
 					{
 						float tempVal = tempDataRow[k];
 						if(tempVal == *(float*)filenodata)  // Risky conditional on float
-							((long*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(long*)nodata;
+							((long*)dest)[rowbeginning+k]= *(long*)nodata;
 						else
-							((long*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(long)tempVal;
+							((long*)dest)[rowbeginning+k]=(long)tempVal;
 					}
 				else if(datatype == FLOAT_TYPE)
 					for(long k = 0; k < tileWidth; k++)
 					{
 						float tempVal = tempDataRow[k];
 						if(tempVal == *(float*)filenodata)  // Risky conditional on float
-							((float*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]= *(float*)nodata;
+							((float*)dest)[rowbeginning+k]= *(float*)nodata;
 						else
-							((float*)dest)[(j+(i*tileLength)-ystart)*tileWidth+k]=(float)tempVal;
+							((float*)dest)[rowbeginning+k]=(float)tempVal;
 					}
+				delete tempDataRow;
+			} else if ((sampleFormat == 3) && (dataSizeFileIn == 8)) {
+				double *tempDataRow= new double[tileWidth];
+				MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileWidth, MPI_BYTE, &status);
+				if(datatype == SHORT_TYPE)
+					for(long k = 0; k < tileWidth; k++)
+					{
+						double tempVal = tempDataRow[k];
+						if(tempVal == *(double*)filenodata)  // Risky conditional on float
+							((short*)dest)[rowbeginning+k]= *(short*)nodata;
+						else
+							((short*)dest)[rowbeginning+k]=(short)tempVal;
+					}
+				else if(datatype == LONG_TYPE)
+					for(long k = 0; k < tileWidth; k++)
+					{
+						double tempVal = tempDataRow[k];
+						if(tempVal == *(double*)filenodata)  // Risky conditional on float
+							((long*)dest)[rowbeginning+k]= *(long*)nodata;
+						else
+							((long*)dest)[rowbeginning+k]=(long)tempVal;
+					}
+				else if(datatype == FLOAT_TYPE)
+					for(long k = 0; k < tileWidth; k++)
+					{
+						double tempVal = tempDataRow[k];
+						if(tempVal == *(double*)filenodata)  // Risky conditional on float
+							((float*)dest)[rowbeginning+k]= *(float*)nodata;
+						else
+							((float*)dest)[rowbeginning+k]=(float)tempVal;
+					}
+				delete tempDataRow;
 			} else {
 				printf("Unsupported TIFF file type.  sampleFormat = %d, dataSizeFileIn = %d.\n", sampleFormat, dataSizeFileIn);
 				MPI_Abort(MCW,-1);
@@ -1055,7 +1125,6 @@ void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* de
 				{
 					uint8_t *tempDataRow= new uint8_t[tileWidth];
 					MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileCols, MPI_BYTE, &status);
-
 					if(datatype == SHORT_TYPE)
 						for(long k = 0; k < tileCols; k++)
 						{
@@ -1083,6 +1152,7 @@ void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* de
 							else
 								((float*)dest)[destOffset+k]=(float)tempVal;
 						}
+					delete tempDataRow;
 				}
 				else if ((sampleFormat == 1) && (dataSizeFileIn == 2)) 
 				{
@@ -1115,6 +1185,7 @@ void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* de
 							else
 								((float*)dest)[destOffset+k]=(float)tempVal;
 						}
+					delete tempDataRow;
 				}
 				else if ((sampleFormat == 1) && (dataSizeFileIn == 4)) 
 				{
@@ -1147,6 +1218,7 @@ void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* de
 							else
 								((float*)dest)[destOffset+k]=(float)tempVal;
 						}
+					delete tempDataRow;
 				}
 				else if ((sampleFormat == 2) && (dataSizeFileIn == 1)) 
 				{
@@ -1180,6 +1252,7 @@ void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* de
 							else
 								((float*)dest)[destOffset+k]=(float)tempVal;
 						}
+					delete tempDataRow;
 				}
 				else if ((sampleFormat == 2) && (dataSizeFileIn == 2)) 
 				{
@@ -1213,6 +1286,7 @@ void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* de
 							else
 								((float*)dest)[destOffset+k]=(float)tempVal;
 						}
+					delete tempDataRow;
 				}
 				else if ((sampleFormat == 2) && (dataSizeFileIn == 4)) 
 				{
@@ -1246,6 +1320,7 @@ void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* de
 							else
 								((float*)dest)[destOffset+k]=(float)tempVal;
 						}
+					delete tempDataRow;
 				}
 				else if(sampleFormat == 3 && dataSizeFileIn == 4)
 				{
@@ -1279,6 +1354,40 @@ void tiffIO::read(long xstart, long ystart, long numRows, long numCols, void* de
 							else
 								((float*)dest)[destOffset+k]=(float)tempVal;
 						}
+					delete tempDataRow;
+				} else if(sampleFormat == 3 && dataSizeFileIn == 8)
+				{
+					double *tempDataRow=new double[tileCols];
+					MPI_File_read( fh, tempDataRow, dataSizeFileIn * tileCols, MPI_BYTE, &status);
+
+					if(datatype == SHORT_TYPE)
+						for(long k = 0; k < tileCols; k++)
+						{
+							double tempVal = tempDataRow[k];
+							if(tempVal == *(double*)filenodata)  // Risky conditional on float
+								((short*)dest)[destOffset+k]= *(short*)nodata;
+							else
+								((short*)dest)[destOffset+k]=(short)tempVal;
+						}
+					else if(datatype == LONG_TYPE)
+						for(long k = 0; k < tileCols; k++)
+						{
+							double tempVal = tempDataRow[k];
+							if(tempVal == *(double*)filenodata)  // Risky conditional on float
+								((long*)dest)[destOffset+k]= *(long*)nodata;
+							else
+								((long*)dest)[destOffset+k]=(long)tempVal;
+						}
+					else if(datatype == FLOAT_TYPE)
+						for(long k = 0; k < tileCols; k++)
+						{
+							double tempVal = tempDataRow[k];
+							if(tempVal == *(double*)filenodata)  // Risky conditional on float
+								((float*)dest)[destOffset+k]= *(float*)nodata;
+							else
+								((float*)dest)[destOffset+k]=(float)tempVal;
+						}
+					delete tempDataRow;
 				}
 			}
 		}
@@ -1712,6 +1821,7 @@ void tiffIO::write(long xstart, long ystart, long numRows, long numCols, void* s
 			MPI_File_seek( fh, mpiOffset, MPI_SEEK_SET);
 			next+=numCols;
 		}
+		delete tempDataRow;
 	}
 	else if( datatype == FLOAT_TYPE ) {
 		mpiOffset = dataOffset + (dataSizeObj*((totalX*ystart) + xstart));

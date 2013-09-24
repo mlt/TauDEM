@@ -42,8 +42,9 @@ email:  dtarb@usu.edu
 #define TIFFIO_H
 
 #include <mpi.h>
-#include "stdint.h"  // See http://en.wikipedia.org/wiki/Stdint.h for details. 
-//  Using "" rather than <> for stdint.h to use file in our source code folder 
+#include <stdint.h>  //  see http://code.google.com/p/b-tk/issues/detail?id=30.  
+//As of VS 2010 MS provides stdint.h so can now use <> rather than "" and use system stdint.h 
+// See http://en.wikipedia.org/wiki/Stdint.h for details.
 //  See http://msdn.microsoft.com/en-us/library/36k2cdd4(v=vs.71).aspx for explanation of difference
 #include "commonLib.h"
 

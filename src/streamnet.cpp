@@ -1144,6 +1144,10 @@ int netsetup(char *pfile,char *srcfile,char *ordfile,char *ad8file,char *elevfil
 			}
 		}
 
+		if(verbose)
+		{
+			cout << rank << " Watershed initialization complete"  << endl;
+		}
 		// each process empties its que, then shares border info, and repeats till everyone is done
 		finished=false;
 		while(!finished){
@@ -1203,11 +1207,21 @@ int netsetup(char *pfile,char *srcfile,char *ordfile,char *ad8file,char *elevfil
 		}
 		// Timer - watershed label time
 		double wshedlabt = MPI_Wtime();
+		if(verbose)
+		{
+			cout << rank << " Writing watershed file"  << endl;
+		}
+	
 
 		long wsGridNodata=MISSINGLONG;
 		short ordNodata=MISSINGSHORT;
 		tiffIO wsIO(wfile, LONG_TYPE,&wsGridNodata,ad8IO);
 		wsIO.write(xstart, ystart, ny, nx, wsGrid->getGridPointer());
+		if(verbose)
+		{
+			cout << rank << " Assigning order array"  << endl;
+		}
+
 
 		//  Use contribs as a short to write out order data that was held in lengths
 		tempShort=0;
@@ -1218,6 +1232,10 @@ int netsetup(char *pfile,char *srcfile,char *ordfile,char *ad8file,char *elevfil
 				if(!lengths->isNodata(i,j))
 					contribs->setData(i,j,(short)lengths->getData(i,j,tempFloat));
 			}
+		if(verbose)
+		{
+			cout << rank << " Writing order file"  << endl;
+		}
 		tiffIO ordIO(ordfile, SHORT_TYPE,&ordNodata,ad8IO);
 		ordIO.write(xstart, ystart, ny, nx, contribs->getGridPointer());
 		

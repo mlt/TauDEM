@@ -76,6 +76,8 @@ bool shp_polyline::read( FILE * f, int & bytesRead )
 		insertPoint( p, i );
 	}
 
+	delete p_parts;
+
 	return true;
 }
 

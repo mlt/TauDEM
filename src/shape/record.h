@@ -15,6 +15,10 @@ class record
 		//CONSTRUCTORS
 		record();
 		record( const record & r );
+		
+		//DESTRUCTOR
+		virtual ~record();
+
 
 		//OPERATORS
 		record operator=( const record & r );
