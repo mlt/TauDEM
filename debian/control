@@ -1,4 +1,4 @@
-Source: taudem-5.0.6
+Source: taudem-5.1.1
 Section: science
 Priority: extra
 Maintainer: Mikhail Titov <mlt@gmx.us>
@@ -8,7 +8,7 @@ Homepage: http://hydrology.usu.edu/taudem/taudem5.0/
 Vcs-Git: https://github.com/mlt/TauDEM.git
 Vcs-Browser: https://github.com/mlt/TauDEM
 
-Package: taudem-5.0.6
+Package: taudem-5.1.1
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Provides: taudem
