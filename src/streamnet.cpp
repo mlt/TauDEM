@@ -38,6 +38,8 @@ email:  dtarb@usu.edu
 
 //  This software is distributed from http://hydrology.usu.edu/taudem/
 
+// 1/25/14.  Modified to use shapelib by Chris George
+
 #include <mpi.h>
 #include <math.h>
 #include <iomanip>
@@ -46,37 +48,44 @@ email:  dtarb@usu.edu
 #include "linearpart.h"
 #include "createpart.h"
 #include "tiffIO.h"
-#include "shape/shapefile.h"
 #include "tardemlib.h"
 #include "linklib.h"
 #include "streamnet.h"
 #include <fstream>
 
+
 #include <limits>
 using namespace std;
 
-shapefile shp1;  //DGT would really like this not to be a global but I do not know how
+SHPHandle shp1;
+DBFHandle dbf1;
+
+int linknoIdx, dslinknoIdx, uslinkno1Idx, uslinkno2Idx, dsnodeidIdx, orderIdx, lengthIdx, magnitudeIdx, dscontareaIdx, 
+	dropIdx, slopeIdx, straightlengthIdx, uscontareaIdx, wsnoIdx, doutendIdx, doutstartIdx, doutmidIdx;
 
 void createStreamNetShapefile(char *streamnetshp)
 {
-	shp1.create(streamnetshp,API_SHP_POLYLINE);
-	{field f("DOUT_MID",FTDouble,16,1);  shp1.insertField(f,0);}
-	{field f("DOUT_START",FTDouble,16,1);  shp1.insertField(f,0);}
-	{field f("DOUT_END",FTDouble,16,1);  shp1.insertField(f,0);}
-	{field f("WSNO",FTInteger,6,0);  shp1.insertField(f,0);}
-	{field f("US_Cont_Area",FTDouble,16,1);  shp1.insertField(f,0);}  //dgt 3/6/2006 changed 4th argument to 1 to force to store as double
-	{field f("Straight_Length",FTDouble,16,1);  shp1.insertField(f,0);}  //dgt 3/6/2006 changed 4th argument to 1 to force to store as double
-	{field f("Slope",FTDouble,16,12);  shp1.insertField(f,0);}
-	{field f("Drop",FTDouble,16,2);  shp1.insertField(f,0);}
-	{field f("DS_Cont_Area",FTDouble,16,1);  shp1.insertField(f,0);}  //dgt 3/6/2006 changed 4th argument to 1 to force to store as double
-	{field f("Magnitude",FTInteger,6,0);  shp1.insertField(f,0);}
-	{field f("Length",FTDouble,16,1);  shp1.insertField(f,0);}
-	{field f("Order",FTInteger,6,0);  shp1.insertField(f,0);}
-	{field f("DSNODEID",FTInteger,12,0);  shp1.insertField(f,0);}
-	{field f("USLINKNO2",FTInteger,6,0);  shp1.insertField(f,0);}
-	{field f("USLINKNO1",FTInteger,6,0);  shp1.insertField(f,0);}
-	{field f("DSLINKNO",FTInteger,6,0);  shp1.insertField(f,0);}
-	{field f("LINKNO",FTInteger,6,0);  shp1.insertField(f,0);}
+	shp1 = SHPCreate(streamnetshp, SHPT_ARC);
+	char streamnetdbf[MAXLN];
+	nameadd(streamnetdbf, streamnetshp, ".dbf");
+	dbf1 = DBFCreate(streamnetdbf);
+	linknoIdx = DBFAddField(dbf1,"LINKNO",FTInteger,6,0);
+	dslinknoIdx = DBFAddField(dbf1,"DSLINKNO",FTInteger,6,0);
+	uslinkno1Idx = DBFAddField(dbf1,"USLINKNO1",FTInteger,6,0);
+	uslinkno2Idx = DBFAddField(dbf1,"USLINKNO2",FTInteger,6,0);
+	dsnodeidIdx = DBFAddField(dbf1,"DSNODEID",FTInteger,12,0);
+	orderIdx = DBFAddField(dbf1,"Order",FTInteger,6,0);
+	lengthIdx = DBFAddField(dbf1,"Length",FTDouble,16,1);
+	magnitudeIdx = DBFAddField(dbf1,"Magnitude",FTInteger,6,0);
+	dscontareaIdx  = DBFAddField(dbf1,"DS_Cont_Area",FTDouble,16,1);
+	dropIdx = DBFAddField(dbf1,"Drop",FTDouble,16,2);
+	slopeIdx = DBFAddField(dbf1,"Slope",FTDouble,16,12);
+	straightlengthIdx = DBFAddField(dbf1,"Straight_Length",FTDouble,16,1);
+	uscontareaIdx = DBFAddField(dbf1,"US_Cont_Area",FTDouble,16,1);
+	wsnoIdx = DBFAddField(dbf1,"WSNO",FTInteger,6,0);
+	doutendIdx = DBFAddField(dbf1,"DOUT_END",FTDouble,16,1);
+	doutstartIdx = DBFAddField(dbf1,"DOUT_START",FTDouble,16,1);
+	doutmidIdx = DBFAddField(dbf1,"DOUT_MID",FTDouble,16,1);
 }
 
 // Write shape from tardemlib.cpp
@@ -84,76 +93,104 @@ int reachshape(long *cnet,float *lengthd, float *elev, float *area, double *poin
 {
 // Function to write stream network shapefile
 
-shape * sh = new shp_polyline();
-double x,y,length,glength,x1,y1,xlast,ylast,usarea,dsarea,dslast,dl,drop,slope;
-int istart,iend,j;
+	int nVertices;
+	if (np < 2) {//singleton - will be duplicated
+		nVertices = 2;
+	}
+	else {
+		nVertices = np;
+	}
+	 
+	double *mypointx = new double[nVertices];
+	double *mypointy = new double[nVertices];
 
-istart=cnet[1];  //  start coord for first link
-iend=cnet[2];//  end coord for first link
-x1=pointx[0];
-y1=pointy[0];
-length=0.;
-xlast=x1;
-ylast=y1;
-usarea=area[0];
-dslast=usarea;
-dsarea=usarea;
-long prt = 0;
+	double x,y,length,glength,x1,y1,xlast,ylast,usarea,dsarea,dslast,dl,drop,slope;
+	int istart,iend,j;
 
-for(j=0; j<np; j++)  //  loop over points
-{
-x=pointx[j];
-y=pointy[j];
-dl=sqrt((x-xlast)*(x-xlast)+(y-ylast)*(y-ylast));
-if(dl > 0.)
-{
-length=length+dl;
-xlast=x;  ylast=y;
-dsarea=dslast;   // keeps track of last ds area
-dslast=area[j];
-}
+	istart=cnet[1];  //  start coord for first link
+	iend=cnet[2];//  end coord for first link
+	x1=pointx[0];
+	y1=pointy[0];
+	length=0.;
+	xlast=x1;
+	ylast=y1;
+	usarea=area[0];
+	dslast=usarea;
+	dsarea=usarea;
+	long prt = 0;
 
-api_point p(x,y);
-sh ->insertPoint(p,0);
+	for(j=0; j<np; j++)  //  loop over points
+	{
+		x=pointx[j];
+		y=pointy[j];
+		// we have to reverse order of pointx and pointy arrays to finish up with 
+		// the point with point index 0 in the shape being the outlet point
+		// (which is for backwards compatibility with previous versions of TauDEM)
+		int i = np - (j + 1);
+		mypointx[i] = x;
+		mypointy[i] = y;
+		dl=sqrt((x-xlast)*(x-xlast)+(y-ylast)*(y-ylast));
+		if(dl > 0.)
+		{
+			length=length+dl;
+			xlast=x;  ylast=y;
+			dsarea=dslast;   // keeps track of last ds area
+			dslast=area[j];
+		}
+	}
+	drop=elev[0]-elev[np-1];
+	slope=0.;
+	float dsdist=lengthd[np-1];
+	float usdist=lengthd[0];
+	float middist=(dsdist+usdist)*0.5;
+	if(length > 0.)slope=drop/length;
+	glength=sqrt((x-x1)*(x-x1)+(y-y1)*(y-y1));
 
-}
-if(np<2){   //  DGT 8/17/04 A polyline seems to require at least 2 data points
-//  so where there was only one repeat it.
-api_point p(x,y);
-sh ->insertPoint(p,0);
+	// ensure at least two points (assuming have at least 1) by repeating singleton
+	if (np < 2) {
+		mypointx[1] = mypointx[0];
+		mypointy[1] = mypointy[0];
+	}
 
-}
-drop=elev[0]-elev[np-1];
-slope=0.;
-float dsdist=lengthd[np-1];
-float usdist=lengthd[0];
-float middist=(dsdist+usdist)*0.5;
-if(length > 0.)slope=drop/length;
-glength=sqrt((x-x1)*(x-x1)+(y-y1)*(y-y1));
+	SHPObject *shape = SHPCreateSimpleObject(
+		SHPT_ARC,						// type
+		nVertices,						// number of vertices
+		mypointx,						// X values
+		mypointy,						// Y values
+		NULL);							// Z values
+	
+	// -1 position means append
+	int ishape = SHPWriteObject(shp1, -1, shape);
 
-shp1.insertShape(sh,0);
-cell v;
-v.setValue((int)cnet[0]);                              shp1[0]->setCell(v,0);
-v.setValue((int)cnet[3]);             shp1[0]->setCell(v,1);
-v.setValue((int)cnet[4]);             shp1[0]->setCell(v,2);
-v.setValue((int)cnet[5]);             shp1[0]->setCell(v,3);
-v.setValue((int)cnet[7]);   shp1[0]->setCell(v,4);
-v.setValue((int)cnet[6]);             shp1[0]->setCell(v,5);
-v.setValue(length);                             shp1[0]->setCell(v,6);
-v.setValue((int)cnet[8]);                                shp1[0]->setCell(v,7);
-v.setValue(dsarea);                             shp1[0]->setCell(v,8);
-v.setValue(drop);                               shp1[0]->setCell(v,9);
-v.setValue(slope);                              shp1[0]->setCell(v,10);
-v.setValue(glength);                    shp1[0]->setCell(v,11);
-v.setValue(usarea);                             shp1[0]->setCell(v,12);
-v.setValue((int)cnet[0]);                                 shp1[0]->setCell(v,13);
-v.setValue(dsdist);                             shp1[0]->setCell(v,14);
-v.setValue(usdist);                             shp1[0]->setCell(v,15);
-v.setValue(middist);                    shp1[0]->setCell(v,16);
+	SHPDestroyObject(shape);
+	delete[] mypointx;
+	delete[] mypointy;
 
-//delete sh;  // DGT attempt to minimize memory leaks.  This causes a MPI error
+	int res;
+	res = DBFWriteIntegerAttribute(dbf1, ishape, linknoIdx, (int)cnet[0]);
+	res *= DBFWriteIntegerAttribute(dbf1, ishape, dslinknoIdx, (int)cnet[3]);
+	res *= DBFWriteIntegerAttribute(dbf1, ishape, uslinkno1Idx, (int)cnet[4]);
+	res *= DBFWriteIntegerAttribute(dbf1, ishape, uslinkno2Idx, (int)cnet[5]);
+	res *= DBFWriteIntegerAttribute(dbf1, ishape, dsnodeidIdx, (int)cnet[7]);
+	res *= DBFWriteIntegerAttribute(dbf1, ishape, orderIdx, (int)cnet[6]);
+	res *= DBFWriteDoubleAttribute(dbf1, ishape, lengthIdx, length);
+	res *= DBFWriteIntegerAttribute(dbf1, ishape, magnitudeIdx, (int)cnet[8]);
+	res *= DBFWriteDoubleAttribute(dbf1, ishape, dscontareaIdx, dsarea);
+	res *= DBFWriteDoubleAttribute(dbf1, ishape, dropIdx, drop);
+	res *= DBFWriteDoubleAttribute(dbf1, ishape, slopeIdx, slope);
+	res *= DBFWriteDoubleAttribute(dbf1, ishape, straightlengthIdx, glength);
+	res *= DBFWriteDoubleAttribute(dbf1, ishape, uscontareaIdx, usarea);
+	res *= DBFWriteIntegerAttribute(dbf1, ishape, wsnoIdx, (int)cnet[0]);
+	res *= DBFWriteDoubleAttribute(dbf1, ishape, doutendIdx, dsdist);
+	res *= DBFWriteDoubleAttribute(dbf1, ishape, doutstartIdx, usdist);
+	res *= DBFWriteDoubleAttribute(dbf1, ishape, doutmidIdx, middist);
 
-return(0);
+	if (res == 0) { // at least one of the write attribute functions returned 0, ie failed
+		fprintf(stderr, "Problem writing to stream network dbf file");
+		fflush(stderr);
+		return 1;
+	}
+	return 0;
 }
 
 struct Slink{
@@ -169,7 +206,11 @@ int netsetup(char *pfile,char *srcfile,char *ordfile,char *ad8file,char *elevfil
 		int rank,size;
 		MPI_Comm_rank(MCW,&rank);
 		MPI_Comm_size(MCW,&size);
-		if(rank==0)printf("StreamNet version %s\n",TDVERSION);
+		if(rank==0)
+			{
+				printf("StreamNet version %s\n",TDVERSION);
+				fflush(stdout);
+		}
 
 		//  Used throughout
 		float tempFloat;
@@ -299,7 +340,7 @@ int netsetup(char *pfile,char *srcfile,char *ordfile,char *ad8file,char *elevfil
 			idGrid->share();
 		}
 
-		// Timer read dime
+		// Timer read time
 		double readt = MPI_Wtime();
 		if(verbose)  // debug writes
 		{
@@ -1030,7 +1071,11 @@ int netsetup(char *pfile,char *srcfile,char *ordfile,char *ad8file,char *elevfil
 			} 
 			fclose(fTreeOut);
 			fclose(fout);
+			SHPClose(shp1);
+			DBFClose(dbf1);
+			/*
 			shp1.close(streamnetshp);
+			*/
 		}else{//other processes send their stuff to process 0
 			//first, wait to recieve word from process 0
 			MPI_Recv(&ibuf,1,MPI_INT,0,0,MCW,&mystatus);//then, send myNumPoints

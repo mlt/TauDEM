@@ -46,7 +46,6 @@ email:  dtarb@usu.edu
 #include <stdlib.h>
 //#include "gridCodes.h"
 #include "commonLib.h"
-#include "shape/shapefile.h"
 //#include "tardemlib.h"
 
 int peukerdouglas(char *felfile,char *ssfile,float *p);

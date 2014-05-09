@@ -43,7 +43,6 @@ email:  dtarb@usu.edu
 #include <stdio.h>
 #include <stdlib.h>
 #include "commonLib.h"
-#include "shape/shapefile.h"
 #include "tardemlib.h"
 
 //-ang demang.tif -fel demfel.tif -ass demass.tif -rz demrz.tif -dfs demdfs.tif [-thresh 0.2] [-alpha 20] [-direct]

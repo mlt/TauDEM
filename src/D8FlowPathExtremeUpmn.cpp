@@ -51,7 +51,6 @@ email:  dtarb@usu.edu
 #include <stdio.h>
 #include <stdlib.h>
 #include "commonLib.h"
-#include "shape/shapefile.h"
 
 int d8flowpathextremeup(char *pfile, char*safile, char *ssafile, int usemax, char *outletfile, int useoutlets, int contcheck);
 

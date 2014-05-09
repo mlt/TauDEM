@@ -54,6 +54,7 @@ email:  dtarb@usu.edu
 
 //  This software is distributed from http://hydrology.usu.edu/taudem/
 
+// 1/25/14.  Modified to use shapelib by Chris George
 
 #include <mpi.h>
 #include <math.h>
@@ -62,7 +63,7 @@ email:  dtarb@usu.edu
 #include "linearpart.h"
 #include "createpart.h"
 #include "tiffIO.h"
-#include "shape/shapefile.h"
+#include "shapelib/shapefil.h"
 #include "ConnectDown.h"
 using namespace std;
 
@@ -634,74 +635,59 @@ int connectdown(char *pfile, char *wfile, char *ad8file, char *outletshapefile, 
 	//if(!rank)printf("inserting shapes...",dist, totaldone,totalnodes);
 	//if(rank==0)printf("--\n");
 	if(rank==0){
-		//  write a shape files
 		//  write a shape file
-		shapefile sh;
+		SHPHandle sh;
+		DBFHandle dbf;
+		sh = SHPCreate(outletshapefile, SHPT_POINT);
+		char outletsdbf[MAXLN];
+		nameadd(outletsdbf, outletshapefile, ".dbf");
+		dbf = DBFCreate(outletsdbf);
 		int nfields;
-		shape *shp;
-		api_point point;
-		sh.create(outletshapefile,API_SHP_POINT);
-		nfields=2;
-		{
-		field f("id",FTInteger,6,0);
-		sh.insertField(f,0);
-		field f1("id_down",FTInteger,6,0);
-		sh.insertField(f1,1);
-		field f2("ad8",FTDouble,12,0);
-		sh.insertField(f2,2);
-		}
+		nfields=2; // CWG looks like this should be 3, but not used anyway
+		int idIndx = DBFAddField(dbf, "id", FTInteger, 6, 0);
+		int iddownIndx = DBFAddField(dbf, "id_down", FTInteger, 6, 0);
+		int ad8Indx = DBFAddField(dbf, "ad8", FTDouble, 12, 0);
 
 		for(int i=0; i<nxy; i++)
-			{
-						point.setX(origxnode[i]);  // DGT says does not need +pdx/2.0);
-						point.setY(origynode[i]);  // DGT +pdy/2.0);
-						shp = new shp_point();
-						shp->insertPoint(point,0);
-						sh.insertShape(shp,0);
-						cell v;
-						v.setValue(wid[i]);
-						shp -> createCell(v,0);
-						v.setValue(widdown[i]);
-						shp -> createCell(v,1);
-						v.setValue(ad8max[i]);
-						shp -> createCell(v,2);
-					}
-		sh.close(outletshapefile);
-
-
-		shapefile shpmoved;
-		shape *shpnew;
-//		api_point point;
-		shpmoved.create(movedoutletshapefile,API_SHP_POINT);
 		{
-		field f("id",FTInteger,6,0);
-		shpmoved.insertField(f,0);
-		field f1("id_down",FTInteger,6,0);
-		shpmoved.insertField(f1,1);
-		field f2("ad8",FTDouble,12,0);
-		shpmoved.insertField(f2,2);
+			double x = origxnode[i];  // DGT says does not need +pdx/2.0;
+			double y = origynode[i];  // DGT +pdy/2.0;
+			SHPObject *shp = SHPCreateSimpleObject(SHPT_POINT, 1, &x, &y, NULL);
+			int indx = SHPWriteObject(sh, -1, shp);
+			int res = DBFWriteIntegerAttribute(dbf, indx, idIndx, wid[i]);
+			res *= DBFWriteIntegerAttribute(dbf, indx, iddownIndx, widdown[i]);
+			res *= DBFWriteDoubleAttribute(dbf, indx, ad8Indx, (double)ad8max[i]);
+			// CWG should check res is not 0
 		}
+		SHPClose(sh);
+		DBFClose(dbf);
+
+		SHPHandle shmoved;
+		DBFHandle dbfmoved;
+		shmoved = SHPCreate(movedoutletshapefile, SHPT_POINT);
+		char movedoutletsdbf[MAXLN];
+		nameadd(movedoutletsdbf, movedoutletshapefile, ".dbf");
+		dbfmoved = DBFCreate(movedoutletsdbf);
+
+		idIndx = DBFAddField(dbfmoved, "id", FTInteger, 6, 0);
+		iddownIndx = DBFAddField(dbfmoved, "id_down", FTInteger, 6, 0);
+		ad8Indx = DBFAddField(dbfmoved, "ad8", FTDouble, 12, 0);
 
 		for(i=0;i<nxy;++i){
-			point.setX(xnode[i]);  // DGT says does not need +pdx/2.0);
-			point.setY(ynode[i]);  // DGT +pdy/2.0);
+			double x = xnode[i];  // DGT says does not need +pdx/2.0;
+			double y = ynode[i];  // DGT +pdy/2.0;
+			SHPObject *shpnew = SHPCreateSimpleObject(SHPT_POINT, 1, &x, &y, NULL);
 			//if(rank==0)printf("x: %g \ty: %g\n",xnode[i],ynode[i]);
-			//if(rank==0)printf("x: %g \ty: %g\tdist: %d\n",point.getX(),point.getY(),dist_moved[i]);
-			shpnew = new shp_point();
-			shpnew->insertPoint(point,0);
-			shpmoved.insertShape(shpnew,0);
-			
-			//  Create cell with new column
-			cell v;
-			v.setValue(wid[i]);  
-			shpnew ->createCell(v,0);
-			v.setValue(widdown[i]);  
-			shpnew ->createCell(v,1);
-			v.setValue(ad8max[i]);  
-			shpnew ->createCell(v,2);
+			//if(rank==0)printf("x: %g \ty: %g\tdist: %d\n",shpnew->padfX[0],shpnew->padfY[0],dist_moved[i]);
+			int indx = SHPWriteObject(shmoved, -1, shpnew);
+			int res = DBFWriteIntegerAttribute(dbfmoved, indx, idIndx, wid[i]);
+			res *= DBFWriteIntegerAttribute(dbfmoved, indx, iddownIndx, widdown[i]);
+			res *= DBFWriteDoubleAttribute(dbfmoved, indx, ad8Indx, (double)ad8max[i]);
+			// CWG should check res is not 0
 		}
 		//if(!rank)printf("closing file...",dist, totaldone,totalnodes);
-		shpmoved.close(movedoutletshapefile);
+		SHPClose(shmoved);
+		DBFClose(dbfmoved);
 	}
 	//if(!rank)printf("done\n.",dist, totaldone,totalnodes);
 	

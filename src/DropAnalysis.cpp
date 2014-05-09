@@ -44,11 +44,11 @@ email:  dtarb@usu.edu
 #include <math.h>
 #include <iomanip>
 #include <queue>
+#include <iostream>
 #include "commonLib.h"
 #include "linearpart.h"
 #include "createpart.h"
 #include "tiffIO.h"
-#include "shape/shapefile.h"
 #include "DropAnalysis.h"
 using namespace std;
 

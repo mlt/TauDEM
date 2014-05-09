@@ -46,13 +46,12 @@ email:  dtarb@usu.edu
 #include "linearpart.h"
 #include "createpart.h"
 #include "tiffIO.h"
-#include "shape/shapefile.h"
 using namespace std;
 
 
 
 
-int gagewatershed( char *pfile, char *wfile, char *shfile) 
+int gagewatershed( char *pfile, char *wfile, char *shfile, char *idfile, int writeid) 
 {//1
 
 	MPI_Init(NULL,NULL);{
@@ -290,15 +289,18 @@ int gagewatershed( char *pfile, char *wfile, char *shfile)
 	double computet = MPI_Wtime();
 
 //  Write id.txt with from and to links
-	if(rank == 0)
+	if(writeid == 1)
 	{
-			FILE *fidout;
-			fidout = fopen("id.txt","w");// process 0 writes 
-			fprintf(fidout,"id iddown\n");
-			for(i=0; i<numOutlets; i++)
-			{
-				fprintf(fidout,"%d %d\n",ids[i],dsidsr[i]);
-			}
+		if(rank == 0)
+		{
+				FILE *fidout;
+				fidout = fopen(idfile,"w");// process 0 writes 
+				fprintf(fidout,"id iddown\n");
+				for(i=0; i<numOutlets; i++)
+				{
+					fprintf(fidout,"%d %d\n",ids[i],dsidsr[i]);
+				}
+		}
 	}
 
 	//Create and write TIFF file

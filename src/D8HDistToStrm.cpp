@@ -51,7 +51,6 @@ email:  dtarb@usu.edu
 #include "linearpart.h"
 #include "createpart.h"
 #include "tiffIO.h"
-#include "shape/shapefile.h"
 using namespace std;
 
 int distgrid(char *pfile, char *srcfile, char *distfile, int thresh)

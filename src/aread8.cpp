@@ -45,7 +45,7 @@ email:  dtarb@usu.edu
 #include "linearpart.h"
 #include "createpart.h"
 #include "tiffIO.h"
-#include "shape/shapefile.h"
+#include <iostream>
 #include "initneighbor.h"
 using namespace std;
 

@@ -44,7 +44,6 @@ email:  dtarb@usu.edu
 #include <stdio.h>
 #include <stdlib.h>
 #include "commonLib.h"
-#include "shape/shapefile.h"
 #include "DropAnalysis.h"
 
 int dropan(char *areafile, char *dirfile, char *elevfile, char *ssafile, char *dropfile, 

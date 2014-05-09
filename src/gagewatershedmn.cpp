@@ -44,15 +44,13 @@ email:  dtarb@usu.edu
 #include <stdio.h>
 #include <stdlib.h>
 #include "commonLib.h"
-#include "shape/shapefile.h"
 #include "tardemlib.h"
 
 
 int main(int argc,char **argv)
 {
-   char pfile[MAXLN],wfile[MAXLN],shfile[MAXLN];
-   int err,useOutlets=0,useMask=0,thresh=0,i=1;
-
+   char pfile[MAXLN],wfile[MAXLN],shfile[MAXLN],idfile[MAXLN];
+   int err,useOutlets=0,useMask=0,thresh=0,i=1,writeid=0;
    if(argc <= 2)
     {  	
 	   goto errexit;
@@ -80,12 +78,23 @@ int main(int argc,char **argv)
 			}
 			else goto errexit;
 		}
-		else if(strcmp(argv[i],"-w")==0)
+		else if(strcmp(argv[i],"-gw")==0)
 		{
 			i++;
 			if(argc > i)
 			{
 				strcpy(wfile,argv[i]);
+				i++;
+			}
+			else goto errexit;
+		}
+		else if(strcmp(argv[i],"-id")==0)
+		{
+			i++;
+			if(argc > i)
+			{
+				strcpy(idfile,argv[i]);
+				writeid=1;  
 				i++;
 			}
 			else goto errexit;
@@ -96,13 +105,17 @@ int main(int argc,char **argv)
 		}
 	}
 
-    if( (err=gagewatershed(pfile,wfile,shfile)) != 0)
+    if( (err=gagewatershed(pfile,wfile,shfile,idfile,writeid)) != 0)
         printf("Gage watershed error %d\n",err);
 
 	return 0;
 
 errexit:
-	   printf("Usage with specific file names to come:\n");
+	   printf("Usage:\n %s -p <pfile> -o <outletshape> -gw <gagewatershed> [-id <idfile>]\n",argv[0]);
+	   printf("<pfile> is the name of the input D8 flow direction grid file.\n");
+	   printf("<outletshape> is the name of the input outlet shapefile.\n");
+	   printf("<gagewatershed> is the output gagewatershed grid file.\n");
+	   printf("<idfile> is optional output text file giving watershed downslope connectivity.\n\n");
        exit(0);
 } 
 

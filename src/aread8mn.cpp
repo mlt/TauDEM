@@ -44,7 +44,6 @@ email:  dtarb@usu.edu
 #include <stdio.h>
 #include <stdlib.h>
 #include "commonLib.h"
-#include "shape/shapefile.h"
 #include "aread8.h"
 
 int main(int argc,char **argv)

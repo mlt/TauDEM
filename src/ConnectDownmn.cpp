@@ -48,7 +48,6 @@ email:  dtarb@usu.edu
 #include <stdio.h>
 #include <stdlib.h>
 #include "commonLib.h"
-#include "shape/shapefile.h"
 #include "ConnectDown.h"
 
 int main(int argc,char **argv)

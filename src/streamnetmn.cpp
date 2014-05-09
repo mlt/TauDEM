@@ -43,10 +43,10 @@ email:  dtarb@usu.edu
 #include <stdio.h>
 #include <stdlib.h>
 #include "commonLib.h"
-#include "shape/shapefile.h"
 #include "DropAnalysis.h"
 #include "tardemlib.h"
 #include "streamnet.h"
+
 
 int main(int argc,char **argv)
 {
