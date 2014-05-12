@@ -1,4 +1,4 @@
-Source: taudem-5.1.1
+Source: taudem
 Section: science
 Priority: extra
 Maintainer: Mikhail Titov <mlt@gmx.us>
@@ -8,12 +8,9 @@ Homepage: http://hydrology.usu.edu/taudem/taudem5/
 Vcs-Git: https://github.com/mlt/TauDEM.git
 Vcs-Browser: https://github.com/mlt/TauDEM
 
-Package: taudem-5.1.1
+Package: taudem
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Provides: taudem
-Replaces: taudem (<= 5.2-2)
-Breaks: taudem (<= 5.2-2)
 Suggests: qgis
 Description: Terrain Analysis Using Digital Elevation Models
  TauDEM (Terrain Analysis Using Digital Elevation Models) is a suite of
