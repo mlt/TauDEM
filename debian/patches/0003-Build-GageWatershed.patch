@@ -1,0 +1,44 @@
+From: Mikhail Titov <mlt@gmx.us>
+Date: Thu, 8 May 2014 16:59:41 -0500
+Subject: Build GageWatershed
+
+---
+ src/CMakeLists.txt | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 29b28af..4f64f5f 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -46,6 +46,7 @@ set (DINFTRANSLIMACCUM DinfTransLimAccum.cpp DinfTransLimAccummn.cpp
+ set (DINFUPDEPEND DinfUpDependence.cpp DinfUpDependencemn.cpp ${common_srcs})
+ set (DROPANALYSISFILES DropAnalysis.cpp DropAnalysismn.cpp
+      ${common_srcs} ${shape_srcs})
++set (GAGEWATERSHED gagewatershed.cpp gagewatershedmn.cpp ${common_srcs} ${shape_srcs})
+ set (GRIDNET gridnetmn.cpp gridnet.cpp
+      ${common_srcs} ${shape_srcs})
+ set (LENGTHAREA LengthArea.cpp LengthAreamn.cpp ${common_srcs})
+@@ -77,6 +78,7 @@ add_executable (dinfrevaccum ${DINFREVACCUM})
+ add_executable (dinftranslimaccum ${DINFTRANSLIMACCUM})
+ add_executable (dinfupdependence ${DINFUPDEPEND})
+ add_executable (dropanalysis ${DROPANALYSISFILES})
++add_executable (gagewatershed ${GAGEWATERSHED})
+ add_executable (gridnet ${GRIDNET})
+ add_executable (lengtharea ${LENGTHAREA})
+ add_executable (moveoutletstostrm ${MVOUTLETSTOSTRMFILES})
+@@ -109,6 +111,7 @@ if(NOT ${MPI_CXX_COMPILER})	# no mpicxx on win32
+   target_link_libraries (dinftranslimaccum ${MPI_CXX_LIBRARIES})
+   target_link_libraries (dinfupdependence ${MPI_CXX_LIBRARIES})
+   target_link_libraries (dropanalysis ${MPI_CXX_LIBRARIES})
++  target_link_libraries (gagewatershed ${MPI_CXX_LIBRARIES})
+   target_link_libraries (gridnet ${MPI_CXX_LIBRARIES})
+   target_link_libraries (lengtharea ${MPI_CXX_LIBRARIES})
+   target_link_libraries (moveoutletstostrm ${MPI_CXX_LIBRARIES})
+@@ -136,6 +139,7 @@ install(TARGETS aread8
+                 dinftranslimaccum
+                 dinfupdependence
+                 dropanalysis
++                gagewatershed
+                 gridnet
+                 lengtharea
+                 moveoutletstostrm

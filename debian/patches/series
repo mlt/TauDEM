@@ -1,2 +1,5 @@
-0001-Include-stdint.h-into-linearpart.h.patch
-0002-Change-installation-directory-to-usr-lib-taudem-vers.patch
+0001-Find-MPI-with-CMake-on-win32.patch
+0002-Lean-mean-read-support-for-ESRI-NoData-from-HFA-form.patch
+0003-Build-GageWatershed.patch
+0004-Use-external-shapelib.patch
+0005-Include-stdint.h-into-linearpart.h.patch
