@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+for command in $(find /usr/lib/$DPKG_MAINTSCRIPT_PACKAGE -type f); do
+    NAME=$(basename $command)
+    update-alternatives --remove taudem-$NAME $command
+done
+
+#DEBHELPER#
+

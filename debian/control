@@ -1,0 +1,49 @@
+Source: taudem-5.1.1
+Section: science
+Priority: extra
+Maintainer: Mikhail Titov <mlt@gmx.us>
+Build-Depends: debhelper (>= 9), libmpich2-dev, cmake
+Standards-Version: 3.9.4
+Homepage: http://hydrology.usu.edu/taudem/taudem5/
+Vcs-Git: https://github.com/mlt/TauDEM.git
+Vcs-Browser: https://github.com/mlt/TauDEM
+
+Package: taudem-5.1.1
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Provides: taudem
+Replaces: taudem (<= 5.2-2)
+Breaks: taudem (<= 5.2-2)
+Suggests: qgis
+Description: Terrain Analysis Using Digital Elevation Models
+ TauDEM (Terrain Analysis Using Digital Elevation Models) is a suite of
+ Digital Elevation Model (DEM) tools for the extraction and analysis of
+ hydrologic information from topography as represented by a DEM. TauDEM
+ provides the following capability:
+  * Development of hydrologically correct (pit removed) DEMs using the
+    flooding approach
+  * Calculates flow paths (directions) and slopes
+  * Calculates contributing area using single and multiple flow
+    direction methods
+  * Multiple methods for the delineation of stream networks including
+    topographic form-based methods sensitive to spatially variable
+    drainage density
+  * Objective methods for determination of the channel network
+    delineation threshold based on stream drops
+  * Delineation of watersheds and subwatersheds draining to each stream
+    segment and association between watershed and segment attributes
+    for setting up hydrologic models
+  * Specialized functions for terrain analysis, including:
+    * Calculates the slope/area ratio that is the basis for the
+      topographic wetness index
+    * Calculates both the distance up to ridges and down to streams in
+      horizontal, vertical, along slope and direct variants
+    * Maps locations upslope where activities have an effect on a
+      downslope location
+    * Evaluates upslope contribution subject to decay or attenuation
+    * Calculates accumulation where the uptake is subject to
+      concentration limitations
+    * Calculates accumulation where the uptake is subject to transport
+      limitations
+    * Evaluates reverse accumulation
+    * Evaluates potential avalanche runout areas

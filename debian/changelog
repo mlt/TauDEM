@@ -1,0 +1,26 @@
+taudem-5.1.1 (5.1.1-1) sid; urgency=low
+
+  * Newer upstream
+
+ -- Mikhail Titov <mlt@gmx.us>  Tue, 24 Sep 2013 13:27:23 -0500
+
+taudem-5.0.6 (5.0.6-3) sid; urgency=low
+
+  * Remove unnecessary dependency on mpich2 package
+  * Debian patches form patch-queue branch
+  * Add Vcs entries to debian/control
+  * Add watch file
+
+ -- Mikhail Titov <mlt@gmx.us>  Mon, 23 Sep 2013 01:01:02 -0500
+
+taudem-5.0.6 (5.0.6-2) raring; urgency=low
+
+  * Cleanup for lintian
+
+ -- Mikhail Titov (launchpad) <mlt@gmx.us>  Sat, 26 Jan 2013 00:50:40 -0600
+
+taudem-5.0.6 (5.0.6-1) oneiric; urgency=low
+
+  * Initial release (Closes: #680565).
+
+ -- Mikhail Titov <mlt@gmx.us>  Mon, 02 Jul 2012 00:29:58 -0500

@@ -1,0 +1,4 @@
+taudem for Debian
+-----------------
+
+Source comes in zip and needs to be repacked. Also stdint.h supplied should be deleted so compiler uses the one from /usr/include/ .

@@ -1,0 +1,10 @@
+#!/bin/sh
+
+set -e
+
+#DEBHELPER#
+
+for command in $(find /usr/lib/$DPKG_MAINTSCRIPT_PACKAGE -type f); do
+    NAME=$(basename $command)
+    update-alternatives --install /usr/bin/$NAME taudem-$NAME $command 100
+done

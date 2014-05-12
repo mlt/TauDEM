@@ -1,0 +1,20 @@
+From: Mikhail Titov <mlt@gmx.us>
+Date: Mon, 16 Sep 2013 01:04:04 -0500
+Subject: Change installation directory to /usr/lib/taudem-$version
+
+===================================================================
+---
+ src/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 41f484f..7daf213 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -116,5 +116,5 @@ install(TARGETS aread8
+                 slopeavedown
+                 streamnet
+                 threshold
+-        DESTINATION bin)
++        DESTINATION lib/taudem-5.1.1)
+ 
