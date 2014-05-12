@@ -63,7 +63,7 @@ email:  dtarb@usu.edu
 #include "linearpart.h"
 #include "createpart.h"
 #include "tiffIO.h"
-#include "shapelib/shapefil.h"
+#include "shapefil.h"
 #include "MoveOutletsToStrm.h"
 using namespace std;
 

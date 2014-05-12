@@ -42,7 +42,7 @@ email:  dtarb@usu.edu
 
 #include <stdio.h>
 #include <string.h>
-#include "shapelib/shapefil.h"
+#include "shapefil.h"
 #include "commonLib.h"
 
 //  Function to read outlets from a shapefile

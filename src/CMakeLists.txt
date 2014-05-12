@@ -4,61 +4,43 @@ cmake_minimum_required(VERSION 2.6)
 
 set (BUILD_SHARED_LIBS OFF)
 
-#SHAPEFILES includes all files in the shapefile library
-#These should be compiled using the makefile in the shape directory
-set (shape_srcs
-     shape/cell.cpp
-     shape/dbf.cpp
-     shape/exception.cpp
-     shape/field.cpp
-     shape/item.cpp
-     shape/point.cpp
-     shape/record.cpp
-     shape/shape.cpp
-     shape/shapefile.cpp
-     shape/shapemain.cpp
-     shape/shp_point.cpp
-     shape/shp_polygon.cpp
-     shape/shp_polyline.cpp
-     shape/ReadOutlets.cpp)
-
 #OBJFILES includes classes, structures, and constants common to all files
-set (common_srcs commonLib.cpp tiffIO.cpp aux_nodata.cpp)
+set (common_srcs commonLib.cpp tiffIO.cpp ReadOutlets.cpp aux_nodata.cpp)
 
-set (D8FILES aread8mn.cpp aread8.cpp ${common_srcs} ${shape_srcs})
-set (DINFFILES areadinfmn.cpp areadinf.cpp ${common_srcs} ${shape_srcs})
-set (D8 D8FlowDirmn.cpp d8.cpp Node.cpp ${common_srcs} ${shape_srcs})
+set (D8FILES aread8mn.cpp aread8.cpp ${common_srcs})
+set (DINFFILES areadinfmn.cpp areadinf.cpp ${common_srcs})
+set (D8 D8FlowDirmn.cpp d8.cpp Node.cpp ${common_srcs})
 set (D8EXTREAMUP D8flowpathextremeup.cpp D8FlowPathExtremeUpmn.cpp
-     ${common_srcs} ${shape_srcs})
+     ${common_srcs})
 set (D8HDIST D8HDistToStrm.cpp D8HDistToStrmmn.cpp ${common_srcs})
 set (DINFAVA DinfAvalanche.cpp DinfAvalanchemn.cpp ${common_srcs})
 set (DINFCONCLIM DinfConcLimAccum.cpp DinfConcLimAccummn.cpp
-     ${common_srcs} ${shape_srcs})
+     ${common_srcs})
 set (DINFDECAY dinfdecayaccum.cpp DinfDecayAccummn.cpp
-     ${common_srcs} ${shape_srcs})
+     ${common_srcs})
 set (DINFDISTDOWN DinfDistDown.cpp DinfDistDownmn.cpp ${common_srcs})
 set (DINFDISTUP DinfDistUp.cpp DinfDistUpmn.cpp ${common_srcs})
 set (DINF DinfFlowDirmn.cpp dinf.cpp Node.cpp
-     ${common_srcs} ${shape_srcs})
+     ${common_srcs})
 set (DINFREVACCUM DinfRevAccum.cpp DinfRevAccummn.cpp ${common_srcs})
 set (DINFTRANSLIMACCUM DinfTransLimAccum.cpp DinfTransLimAccummn.cpp
-     ${common_srcs} ${shape_srcs})
+     ${common_srcs})
 set (DINFUPDEPEND DinfUpDependence.cpp DinfUpDependencemn.cpp ${common_srcs})
 set (DROPANALYSISFILES DropAnalysis.cpp DropAnalysismn.cpp
-     ${common_srcs} ${shape_srcs})
-set (GAGEWATERSHED gagewatershed.cpp gagewatershedmn.cpp ${common_srcs} ${shape_srcs})
+     ${common_srcs})
+set (GAGEWATERSHED gagewatershed.cpp gagewatershedmn.cpp ${common_srcs})
 set (GRIDNET gridnetmn.cpp gridnet.cpp
-     ${common_srcs} ${shape_srcs})
+     ${common_srcs})
 set (LENGTHAREA LengthArea.cpp LengthAreamn.cpp ${common_srcs})
 set (MVOUTLETSTOSTRMFILES MoveOutletsToStrm.cpp MoveOutletsToStrmmn.cpp
-     ${common_srcs} ${shape_srcs})
+     ${common_srcs})
 set (PEUKERDOUGLAS PeukerDouglas.cpp PeukerDouglasmn.cpp ${common_srcs})
 set (PITREMOVE flood.cpp PitRemovemn.cpp ${common_srcs})
 set (SLOPEAREA SlopeArea.cpp SlopeAreamn.cpp ${common_srcs})
 set (SLOPEAREARATIO SlopeAreaRatio.cpp SlopeAreaRatiomn.cpp ${common_srcs})
 set (SLOPEAVEDOWN SlopeAveDown.cpp SlopeAveDownmn.cpp ${common_srcs})
 set (STREAMNET streamnetmn.cpp streamnet.cpp
-     ${common_srcs} ${shape_srcs})
+     ${common_srcs})
 set (THRESHOLD Threshold.cpp Thresholdmn.cpp ${common_srcs})
 #set (READTIFFILES ReadTif.cpp ReadTifmn.cpp ${common_srcs})
 
@@ -96,32 +78,32 @@ add_executable (threshold ${THRESHOLD})
 find_package(MPI REQUIRED)
 if(NOT ${MPI_CXX_COMPILER})	# no mpicxx on win32
   include_directories(${MPI_CXX_INCLUDE_PATH})
-  target_link_libraries(aread8 ${MPI_CXX_LIBRARIES})
-  target_link_libraries (areadinf ${MPI_CXX_LIBRARIES})
-  target_link_libraries (d8flowdir ${MPI_CXX_LIBRARIES})
-  target_link_libraries (d8flowpathextremeup ${MPI_CXX_LIBRARIES})
-  target_link_libraries (d8hdisttostrm ${MPI_CXX_LIBRARIES})
-  target_link_libraries (dinfavalanche ${MPI_CXX_LIBRARIES})
-  target_link_libraries (dinfconclimaccum ${MPI_CXX_LIBRARIES})
-  target_link_libraries (dinfdecayaccum ${MPI_CXX_LIBRARIES})
-  target_link_libraries (dinfdistdown ${MPI_CXX_LIBRARIES})
-  target_link_libraries (dinfdistup ${MPI_CXX_LIBRARIES})
-  target_link_libraries (dinfflowdir ${MPI_CXX_LIBRARIES})
-  target_link_libraries (dinfrevaccum ${MPI_CXX_LIBRARIES})
-  target_link_libraries (dinftranslimaccum ${MPI_CXX_LIBRARIES})
-  target_link_libraries (dinfupdependence ${MPI_CXX_LIBRARIES})
-  target_link_libraries (dropanalysis ${MPI_CXX_LIBRARIES})
-  target_link_libraries (gagewatershed ${MPI_CXX_LIBRARIES})
-  target_link_libraries (gridnet ${MPI_CXX_LIBRARIES})
-  target_link_libraries (lengtharea ${MPI_CXX_LIBRARIES})
-  target_link_libraries (moveoutletstostrm ${MPI_CXX_LIBRARIES})
-  target_link_libraries (peukerdouglas ${MPI_CXX_LIBRARIES})
-  target_link_libraries (pitremove ${MPI_CXX_LIBRARIES})
-  target_link_libraries (slopearea ${MPI_CXX_LIBRARIES})
-  target_link_libraries (slopearearatio ${MPI_CXX_LIBRARIES})
-  target_link_libraries (slopeavedown ${MPI_CXX_LIBRARIES})
-  target_link_libraries (streamnet ${MPI_CXX_LIBRARIES})
-  target_link_libraries (threshold ${MPI_CXX_LIBRARIES})
+  target_link_libraries(aread8 ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (areadinf ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (d8flowdir ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (d8flowpathextremeup ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (d8hdisttostrm ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (dinfavalanche ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (dinfconclimaccum ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (dinfdecayaccum ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (dinfdistdown ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (dinfdistup ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (dinfflowdir ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (dinfrevaccum ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (dinftranslimaccum ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (dinfupdependence ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (dropanalysis ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (gagewatershed ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (gridnet ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (lengtharea ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (moveoutletstostrm ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (peukerdouglas ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (pitremove ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (slopearea ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (slopearearatio ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (slopeavedown ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (streamnet ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
+  target_link_libraries (threshold ${MPI_CXX_LIBRARIES} ${LIBSHP_LIBRARIES})
 endif(NOT ${MPI_CXX_COMPILER})
 
 install(TARGETS aread8 
