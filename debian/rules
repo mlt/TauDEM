@@ -10,7 +10,7 @@
 #export DH_VERBOSE=1
 
 %:
-	dh $@ --buildsystem=cmake --sourcedirectory=src
+	dh $@ --buildsystem=cmake
 
 # can't exclude dot :(
 #CXXFLAGS="-iquote /usr/include"
@@ -21,8 +21,4 @@ CXX=mpicxx
 
 override_dh_auto_configure:
 	CXX=$(CXX) CXXFLAGS="$(CXXFLAGS)" dh_auto_configure
-
-override_dh_auto_build:
-	-rm src/stdint.h
-	dh_auto_build
 
